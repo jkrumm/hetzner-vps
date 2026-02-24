@@ -1,0 +1,57 @@
+## Traefik dynamic configuration — middlewares
+## Applied via labels: traefik.http.routers.<name>.middlewares=crowdsec@file,rate-limit@file,security-headers@file
+
+http:
+  middlewares:
+
+    # CrowdSec bouncer — blocks IPs flagged by community intelligence.
+    # Requires crowdsec container running and CROWDSEC_BOUNCER_KEY in env.
+    crowdsec:
+      plugin:
+        crowdsec-bouncer-traefik-plugin:
+          enabled: true
+          logLevel: WARN
+          crowdsecMode: live
+          crowdsecLapiHost: crowdsec:8080
+          crowdsecLapiKeyEnvironmentVariableName: CROWDSEC_BOUNCER_KEY
+          # Use Valkey (redis) as cache backend (database 1, keep db 0 for apps)
+          redisCacheEnabled: "true"
+          redisCacheHost: "redis:6379"
+          redisCacheDatabase: "1"
+
+    # Rate limiting — per source IP.
+    # Built-in Traefik middleware, no external dependency.
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+
+    # Security headers — HSTS + browser security hardening.
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()"
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        customFrameOptionsValue: "SAMEORIGIN"
+
+    # Dashboard auth — basic auth for Traefik dashboard.
+    # Generate: htpasswd -nB user | sed -e s/\\$/\\$\\$/g
+    dashboard-auth:
+      basicAuth:
+        usersFile: ""
+        users:
+          - "${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_PASSWORD}"
+
+    # Tailscale-only — restrict access to Tailscale CGNAT range (100.64.0.0/10).
+    # Apply to internal dashboards (Traefik, WUD).
+    tailscale-only:
+      ipAllowList:
+        sourceRange:
+          - "100.64.0.0/10"

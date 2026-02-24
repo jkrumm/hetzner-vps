@@ -1,0 +1,63 @@
+## OpenTelemetry Collector configuration
+## Receives OTLP from apps → batches → exports to SigNoz on homelab via Tailscale.
+## SigNoz OTLP endpoint configured via SIGNOZ_OTLP_ENDPOINT env var (Tailscale IP).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+    send_batch_max_size: 2000
+  # Add VPS hostname to all telemetry
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: host.name
+        value: hetzner-vps
+        action: upsert
+
+exporters:
+  # Forward to SigNoz on homelab via Tailscale
+  otlp/signoz:
+    endpoint: "${SIGNOZ_OTLP_ENDPOINT}"
+    tls:
+      insecure: true   # Internal Tailscale network, no public TLS needed
+
+  # Debug logging (disable in prod if too verbose)
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/signoz]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/signoz]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/signoz]
+
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      address: 0.0.0.0:8888
+      level: none   # Disable internal metrics (reduce noise)

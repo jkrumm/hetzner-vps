@@ -1,0 +1,16 @@
+# TLS certificates — never commit
+traefik/acme.json
+
+# Local env overrides
+.env
+*.env.local
+
+# OS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+
+# Doppler local config
+.doppler.yaml

@@ -1,0 +1,148 @@
+---
+# Monitoring stack
+# Deploy: doppler run -- docker compose -f compose.monitoring.yml up -d
+# Requires core stack (compose.yml) to be running first.
+
+networks:
+  monitoring-net:
+    external: true
+  socket-proxy-net:
+    driver: bridge
+    internal: true
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Docker socket proxy — separate instance for monitoring stack.
+  # ---------------------------------------------------------------------------
+  socket-proxy-monitoring:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      IMAGES: 1
+      INFO: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy-net
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # What's Up Docker — container update tracking with semver awareness.
+  # Dashboard accessible via Tailscale only (no public Traefik route).
+  # Pushover notifications on MINOR updates. Postgres/Valkey: notify only.
+  # ---------------------------------------------------------------------------
+  wud:
+    image: fmartinou/whats-up-docker:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    environment:
+      # Pushover notifications
+      WUD_TRIGGER_PUSHOVER_TOKEN: ${WUD_TRIGGER_PUSHOVER_TOKEN}
+      WUD_TRIGGER_PUSHOVER_USER: ${WUD_TRIGGER_PUSHOVER_USER}
+      # Default: notify on MINOR updates
+      WUD_WATCHER_LOCAL_THRESHOLD: MINOR
+      WUD_WATCHER_LOCAL_TRIGGER_INCLUDE: pushover
+      WUD_LOG_LEVEL: warn
+    volumes:
+      - wud-data:/store
+    # Port 3000 accessible via Tailscale only (no public exposure, no Traefik route)
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - socket-proxy-net
+      - monitoring-net
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.trigger.pushover.enabled=true"
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector — receives OTLP from apps, forwards to SigNoz
+  # on homelab via Tailscale. Ports accessible on monitoring-net + Tailscale.
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - monitoring-net
+    # Bind to all interfaces so Tailscale IP is reachable for app instrumentation
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    labels:
+      - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
+      - "wud.trigger.pushover.enabled=true"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # Beszel agent — sends server metrics to Beszel hub on homelab.
+  # Connects to hub via Tailscale IP. Key generated in Beszel hub UI.
+  # ---------------------------------------------------------------------------
+  beszel-agent:
+    image: henrygd/beszel-agent:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    environment:
+      KEY: ${BESZEL_AGENT_KEY}
+      # Agent listens on :45876 (Beszel default), accessible via Tailscale only
+    ports:
+      - "45876:45876"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring-net
+    labels:
+      - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
+      - "wud.trigger.pushover.enabled=true"
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # Dozzle — log viewer running in agent mode.
+  # Hub on homelab discovers this agent via Tailscale IP.
+  # ---------------------------------------------------------------------------
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    command: agent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring-net
+    ports:
+      - "7007:7007"   # Agent port, accessible via Tailscale only
+    labels:
+      - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
+      - "wud.trigger.pushover.enabled=true"
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+volumes:
+  wud-data:
