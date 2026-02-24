@@ -160,7 +160,7 @@ services:
       - "traefik.http.services.myapp.loadbalancer.server.port=3000"
       - "traefik.http.routers.myapp.middlewares=crowdsec@file,rate-limit@file,security-headers@file"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
+      - "wud.watch=true"
     networks: [proxy, postgres-net]
     security_opt: [no-new-privileges:true]
     logging:

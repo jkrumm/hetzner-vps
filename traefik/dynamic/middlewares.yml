@@ -41,16 +41,11 @@ http:
         forceSTSHeader: true
         customFrameOptionsValue: "SAMEORIGIN"
 
-    # Dashboard auth — basic auth for Traefik dashboard.
-    # Generate: htpasswd -nB user | sed -e s/\\$/\\$\\$/g
-    dashboard-auth:
-      basicAuth:
-        usersFile: ""
-        users:
-          - "${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_PASSWORD}"
-
     # Tailscale-only — restrict access to Tailscale CGNAT range (100.64.0.0/10).
-    # Apply to internal dashboards (Traefik, WUD).
+    # Applied to all internal dashboards (Traefik, WUD).
+    # This is the sole auth mechanism for dashboards — Tailscale membership IS the auth.
+    # Basic auth is intentionally omitted: redundant for a personal tailnet and
+    # dynamic config files don't support ${ENV_VAR} substitution anyway.
     tailscale-only:
       ipAllowList:
         sourceRange:

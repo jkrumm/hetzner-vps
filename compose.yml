@@ -15,6 +15,11 @@ networks:
   socket-proxy-net:
     driver: bridge
     internal: true
+  # crowdsec-net: Traefik's bouncer plugin (inside Traefik) must reach CrowdSec LAPI.
+  # This dedicated internal network connects only Traefik + CrowdSec.
+  crowdsec-net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres-data:
@@ -65,6 +70,10 @@ services:
       - "443:443"
     environment:
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
+      # CrowdSec bouncer key: read by plugin via crowdsecLapiKeyEnvironmentVariableName
+      CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY}
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
@@ -73,6 +82,7 @@ services:
     networks:
       - proxy
       - socket-proxy-net
+      - crowdsec-net    # bouncer plugin inside Traefik calls crowdsec:8080 over this network
     labels:
       # Traefik dashboard — restricted to Tailscale IP range via middleware
       - "traefik.enable=true"
@@ -80,11 +90,12 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=dashboard-auth@file,tailscale-only@file"
-      # WUD: auto-update on minor releases
+      - "traefik.http.routers.dashboard.middlewares=tailscale-only@file"
+      # Request wildcard cert via DNS-01 — Docker Compose substitutes ${DOMAIN} in labels ✓
+      - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
+      - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
+      # WUD: track this container for updates
       - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
-      - "wud.tag.transform=^v?(\\d+\\.\\d+\\.\\d+)$$ -> v$$1"
-      - "wud.trigger.pushover.enabled=true"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -114,11 +125,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # WUD: notify only — never auto-update (manual with backup first)
+    # WUD: watch for updates, notify only (WUD never auto-updates without a Docker trigger)
     labels:
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
-      - "wud.auto.enabled=false"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -146,11 +155,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    # WUD: notify only — never auto-update
+    # WUD: watch for updates, notify only
     labels:
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
-      - "wud.auto.enabled=false"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
@@ -176,9 +183,9 @@ services:
       - traefik-logs:/var/log/traefik:ro
     networks:
       - monitoring-net
+      - crowdsec-net    # Traefik bouncer reaches LAPI via crowdsec-net
     labels:
       - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

@@ -46,12 +46,14 @@ services:
       - no-new-privileges:true
     mem_limit: 256m
     environment:
-      # Pushover notifications
-      WUD_TRIGGER_PUSHOVER_TOKEN: ${WUD_TRIGGER_PUSHOVER_TOKEN}
-      WUD_TRIGGER_PUSHOVER_USER: ${WUD_TRIGGER_PUSHOVER_USER}
-      # Default: notify on MINOR updates
-      WUD_WATCHER_LOCAL_THRESHOLD: MINOR
-      WUD_WATCHER_LOCAL_TRIGGER_INCLUDE: pushover
+      # Docker socket via proxy — WUD must not mount docker.sock directly
+      WUD_WATCHER_LOCAL_HOST: socket-proxy-monitoring
+      WUD_WATCHER_LOCAL_PORT: 2375
+      # Pushover notifications — instance index (_1_) is required in WUD env var names
+      WUD_TRIGGER_PUSHOVER_1_TOKEN: ${WUD_TRIGGER_PUSHOVER_TOKEN}
+      WUD_TRIGGER_PUSHOVER_1_USER: ${WUD_TRIGGER_PUSHOVER_USER}
+      # Trigger on MINOR version bumps (patch updates also trigger)
+      WUD_TRIGGER_PUSHOVER_1_THRESHOLD: minor
       WUD_LOG_LEVEL: warn
     volumes:
       - wud-data:/store
@@ -63,7 +65,6 @@ services:
       - monitoring-net
     labels:
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
@@ -89,7 +90,7 @@ services:
       - "4318:4318"   # OTLP HTTP
     labels:
       - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
+      - "wud.watch=true"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -115,7 +116,7 @@ services:
       - monitoring-net
     labels:
       - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
+      - "wud.watch=true"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
@@ -131,6 +132,8 @@ services:
       - no-new-privileges:true
     mem_limit: 64m
     command: agent
+    environment:
+      DOZZLE_HOSTNAME: hetzner-vps
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -139,7 +142,7 @@ services:
       - "7007:7007"   # Agent port, accessible via Tailscale only
     labels:
       - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
-      - "wud.trigger.pushover.enabled=true"
+      - "wud.watch=true"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }

@@ -1,5 +1,10 @@
 ## Traefik v3 — Static Configuration
 ## Deploy: doppler run -- docker compose up -d
+##
+## NOTE: This file does NOT support ${ENV_VAR} substitution.
+## Domain-specific config (wildcard cert domains, ACME email) is handled via:
+##   - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL env var in compose.yml
+##   - tls.domains labels on the dashboard router in compose.yml
 
 api:
   dashboard: true
@@ -10,11 +15,10 @@ log:
   filePath: /var/log/traefik/traefik.log
 
 accessLog:
+  # Log ALL requests — CrowdSec needs full access logs to detect behavioral patterns.
+  # Filtering to 4xx/5xx would blind CrowdSec to successful attack patterns (e.g. brute force).
   filePath: /var/log/traefik/access.log
   bufferingSize: 100
-  filters:
-    statusCodes:
-      - "400-599"
 
 entryPoints:
   web:
@@ -31,17 +35,15 @@ entryPoints:
     http:
       tls:
         certResolver: letsencrypt
-        domains:
-          - main: "${DOMAIN}"
-            sans:
-              - "*.${DOMAIN}"
+        # Wildcard domain is requested via tls.domains labels on the dashboard router.
+        # See compose.yml: traefik.http.routers.dashboard.tls.domains[0].*
       middlewares:
         - security-headers@file
 
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "admin@${DOMAIN}"
+      # email set via TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL env var in compose.yml
       storage: /etc/traefik/acme.json
       dnsChallenge:
         provider: cloudflare
