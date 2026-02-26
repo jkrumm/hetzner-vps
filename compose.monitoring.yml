@@ -9,6 +9,9 @@ networks:
   socket-proxy-watchtower-net:
     driver: bridge
     internal: true
+  socket-proxy-monitoring-net:
+    driver: bridge
+    internal: true
 
 services:
 
@@ -65,6 +68,29 @@ services:
       options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
+  # Docker socket proxy — read-only, for Dozzle and Beszel agent.
+  # Grants only the endpoints each needs: container list, logs, stats.
+  # POST=0 ensures no write operations are possible.
+  # ---------------------------------------------------------------------------
+  socket-proxy-monitoring:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: 1
+      LOGS: 1
+      STATS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy-monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
   # OpenTelemetry Collector — receives OTLP from apps, forwards to SigNoz
   # on homelab via Tailscale. Ports accessible on monitoring-net + Tailscale.
   # ---------------------------------------------------------------------------
@@ -99,13 +125,13 @@ services:
     mem_limit: 64m
     environment:
       KEY: ${BESZEL_AGENT_KEY}
+      DOCKER_HOST: tcp://socket-proxy-monitoring:2375
       # Agent listens on :45876 (Beszel default), accessible via Tailscale only
     ports:
       - "45876:45876"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - monitoring-net
+      - socket-proxy-monitoring-net
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
@@ -123,10 +149,10 @@ services:
     command: agent
     environment:
       DOZZLE_HOSTNAME: hetzner-vps
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      DOCKER_HOST: tcp://socket-proxy-monitoring:2375
     networks:
       - monitoring-net
+      - socket-proxy-monitoring-net
     ports:
       - "7007:7007"   # Agent port, accessible via Tailscale only
     logging:

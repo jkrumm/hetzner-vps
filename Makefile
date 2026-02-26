@@ -1,53 +1,44 @@
-.PHONY: networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
-        logs-networking logs-infra logs-monitoring ps backup firewall shell-postgres
+.PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
+        ps backup firewall shell-postgres dev-up dev-down
 
 COMPOSE_NET   = doppler run -- docker compose -f compose.networking.yml
 COMPOSE_INFRA = doppler run -- docker compose -f compose.infra.yml
 COMPOSE_MON   = doppler run -- docker compose -f compose.monitoring.yml
+COMPOSE_DEV   = docker compose -f compose.dev.yml
 
-## Networking stack (cloudflared, Traefik, socket-proxy)
-networking-up:
-	$(COMPOSE_NET) up -d
+## All stacks — bring up in dependency order
+up:
+	$(MAKE) networking-up
+	$(MAKE) infra-up
+	$(MAKE) monitoring-up
 
-networking-down:
-	$(COMPOSE_NET) down
+## All stacks — tear down in reverse order
+down:
+	$(MAKE) monitoring-down
+	$(MAKE) infra-down
+	$(MAKE) networking-down
 
-## Infra stack (Postgres, Valkey)
-infra-up:
-	$(COMPOSE_INFRA) up -d
+## Individual stacks — for targeted restarts
+networking-up:   ; $(COMPOSE_NET) up -d
+networking-down: ; $(COMPOSE_NET) down
+infra-up:        ; $(COMPOSE_INFRA) up -d
+infra-down:      ; $(COMPOSE_INFRA) down
+monitoring-up:   ; $(COMPOSE_MON) up -d
+monitoring-down: ; $(COMPOSE_MON) down
 
-infra-down:
-	$(COMPOSE_INFRA) down
-
-## Monitoring stack (OTel, Beszel, Dozzle, Watchtower)
-monitoring-up:
-	$(COMPOSE_MON) up -d
-
-monitoring-down:
-	$(COMPOSE_MON) down
-
-## Logs (per stack)
-logs-networking:
-	$(COMPOSE_NET) logs -f
-
-logs-infra:
-	$(COMPOSE_INFRA) logs -f
-
-logs-monitoring:
-	$(COMPOSE_MON) logs -f
-
-## Status (all containers)
+## Status / ops
 ps:
 	docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-## Backup (manual trigger)
 backup:
 	./scripts/backup-pg.sh
 
-## Hetzner Cloud Firewall (IaC)
 firewall:
 	./scripts/firewall.sh
 
-## Postgres shell
 shell-postgres:
 	docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+
+## Local dev (Postgres + Valkey, ports exposed, no Doppler)
+dev-up:   ; $(COMPOSE_DEV) up -d
+dev-down: ; $(COMPOSE_DEV) down

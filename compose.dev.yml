@@ -1,0 +1,36 @@
+---
+# Local dev infra — Postgres + Valkey with ports exposed for direct app connections.
+# No Doppler, no external networks, no production hardening.
+# Usage: docker compose -f compose.dev.yml up -d
+#        make dev-up / make dev-down
+
+services:
+
+  postgres:
+    image: postgres:18
+    container_name: postgres
+    environment:
+      POSTGRES_DB: dev
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:9
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-dev-data:/data
+
+volumes:
+  postgres-dev-data:
+  valkey-dev-data:
