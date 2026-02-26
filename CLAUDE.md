@@ -23,12 +23,6 @@ make backup              # manual pg_dump → S3
 # Ops
 make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
 
-# CrowdSec
-docker exec crowdsec cscli decisions list
-docker exec crowdsec cscli alerts list
-docker exec crowdsec cscli metrics
-docker exec crowdsec cscli bouncers list
-
 # Deploy with Doppler (explicit form)
 doppler run -- docker compose up -d
 doppler run -- docker compose -f compose.monitoring.yml up -d
@@ -49,10 +43,11 @@ Key variables:
 | `DOMAIN` | Traefik labels (wildcard cert: `*.DOMAIN`) |
 | `ACME_EMAIL` | `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on Traefik |
 | `CF_DNS_API_TOKEN` | Traefik → lego → Cloudflare DNS-01 challenge |
+| `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared tunnel auth (from Cloudflare dashboard) |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
-| `CROWDSEC_BOUNCER_KEY` | Traefik env → CrowdSec bouncer plugin |
 | `AWS_*` + `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
-| `WUD_TRIGGER_PUSHOVER_TOKEN/USER` | WUD (env vars mapped to `_1_` instance) |
+| `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Watchtower → Pushover via shoutrrr |
+| `ROLLHOOK_ADMIN_TOKEN/WEBHOOK_TOKEN` | RollHook API auth (add when deploying RollHook) |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `SIGNOZ_OTLP_ENDPOINT` | OTel collector config (`otel/config.yaml`) |
 
@@ -73,8 +68,17 @@ Internal networks (created by Docker Compose, not external):
 
 | Network | Purpose |
 |-|-|
-| `socket-proxy-net` | Traefik + WUD → docker-socket-proxy (no external internet) |
-| `crowdsec-net` | Traefik bouncer plugin → CrowdSec LAPI only |
+| `socket-proxy-net` | Traefik → docker-socket-proxy (read-only, POST=0) |
+| `socket-proxy-watchtower-net` | Watchtower → socket-proxy-watchtower (POST=1, write access) |
+
+**Traffic routing model:**
+
+| Traffic type | Path |
+|-|-|
+| Public apps + RollHook | Internet → Cloudflare edge → cloudflared (outbound) → Traefik → service |
+| Traefik dashboard | Same tunnel path, restricted by `tailscale-only` middleware |
+| OTel data from apps | app → otel-collector:4317 → SigNoz on HomeLab via Tailscale |
+| Postgres / Valkey | Internal Docker networks only — zero exposure |
 
 **Key gotcha:** `traefik.yml` static config does NOT support `${ENV_VAR}` substitution. Domain-specific config uses two workarounds:
 - ACME email → `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on the Traefik container
@@ -85,8 +89,8 @@ Internal networks (created by Docker Compose, not external):
 ## File Map
 
 ```
-compose.yml                   Core infra (Traefik, Postgres, Valkey, CrowdSec, socket-proxy)
-compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, WUD, socket-proxy-monitoring)
+compose.yml                   Core infra (cloudflared, Traefik, Postgres, Valkey, socket-proxy)
+compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower, socket-proxy-watchtower)
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare), plugin
 traefik/dynamic/middlewares.yml  CrowdSec bouncer, rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
@@ -104,13 +108,13 @@ Makefile                      Operational shortcuts
 
 ## Service Notes
 
-**Traefik** — reads Docker labels via `socket-proxy` (TCP, not docker.sock). Wildcard cert covers all app subdomains. CrowdSec bouncer plugin runs inside Traefik, calls `crowdsec:8080` via `crowdsec-net`. Full access logging enabled (not filtered) so CrowdSec can detect behavioral patterns.
+**cloudflared** — handles all public ingress via Cloudflare Tunnel. Makes outbound connections to Cloudflare edge only — no ports exposed. Configure public hostnames in Cloudflare dashboard (Zero Trust → Tunnels): `*.DOMAIN` → `https://traefik:443` with TLS verify disabled (internal cert). `--no-autoupdate` lets Watchtower manage the image.
 
-**Valkey** — `container_name: redis` so apps reference it as `redis:6379`. On both `valkey-net` (for apps) and `monitoring-net` (CrowdSec uses it as bouncer cache on DB 1). Persistence enabled (`--save 60 1`). Major version pinned — update manually.
+**Traefik** — reads Docker labels via `socket-proxy` (TCP, not docker.sock). No ports exposed — receives traffic from cloudflared internally on port 443. Wildcard cert via DNS-01 (still required so cloudflared can verify the TLS handshake).
 
-**CrowdSec** — pre-installs `crowdsecurity/traefik` collection via `COLLECTIONS` env var. Reads Traefik access logs from the shared `traefik-logs` volume. One-time post-deploy setup required: `cscli capi register` + `cscli bouncers add traefik-bouncer` → key goes to Doppler.
+**Valkey** — `container_name: redis` so apps reference it as `redis:6379`. Persistence enabled (`--save 60 1`). Major version pinned — update manually.
 
-**WUD** — connects to Docker via `WUD_WATCHER_LOCAL_HOST=socket-proxy-monitoring` (not docker.sock). Pushover trigger uses instance index: `WUD_TRIGGER_PUSHOVER_1_TOKEN`. Postgres and Valkey: no auto-update, WUD just notifies (WUD never auto-updates without an explicit Docker trigger configured).
+**Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Pushover via shoutrrr at warn level (failures only). Runs daily at 04:00.
 
 **OTel Collector** — ports `4317` (gRPC) and `4318` (HTTP) bound to all interfaces. Apps on `monitoring-net` reach it by hostname. Protected from public internet by Hetzner Firewall + UFW.
 
@@ -129,14 +133,27 @@ networks:
 
 services:
   myapp:
+    image: ${IMAGE_TAG:-ghcr.io/jkrumm/myapp:latest}
+    # NO container_name — RollHook must scale to 2 instances during rollout
+    # NO ports — Traefik routes via Docker DNS; ports prevent scaling
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:3000/health]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.myapp.rule=Host(`app.${DOMAIN}`)"
       - "traefik.http.routers.myapp.entrypoints=websecure"
       - "traefik.http.routers.myapp.tls.certresolver=letsencrypt"
       - "traefik.http.services.myapp.loadbalancer.server.port=3000"
-      - "traefik.http.routers.myapp.middlewares=crowdsec@file,rate-limit@file,security-headers@file"
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "traefik.http.routers.myapp.middlewares=rate-limit@file,security-headers@file"
+      # Active health check — Traefik stops routing to draining instance immediately
+      - "traefik.http.services.myapp.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.myapp.loadbalancer.healthcheck.interval=5s"
+    networks:
+      - proxy
     security_opt: [no-new-privileges:true]
     logging:
       driver: json-file
@@ -145,15 +162,41 @@ services:
 
 ---
 
+## RollHook — Zero-Downtime Deployments
+
+RollHook (port 7700, behind Traefik, publicly accessible via Cloudflare at `rollhook-vps.<DOMAIN>`) receives webhook calls from GitHub Actions to trigger rolling deployments. It pulls the new image and scales one container at a time, waiting for healthchecks before removing the old instance.
+
+### Hard constraints for RollHook-managed apps
+
+| Constraint | Why |
+|-|-|
+| No `ports:` | Docker DNS routes traffic; `ports` blocks scaling to 2 instances |
+| No `container_name:` | Fixed names prevent creating the second instance during rollout |
+| `healthcheck:` required | Rollout waits for healthy before removing old container |
+| Image: `${IMAGE_TAG:-<registry>/<image>:latest}` | RollHook passes `IMAGE_TAG=<full-uri>` as inline env var |
+| Graceful SIGTERM | Return `503` from `/health`, wait 2-3s, drain requests, exit cleanly |
+
+See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patterns, GitHub Actions step).
+
+### Doppler secrets (when adding RollHook to compose)
+
+| Variable | Purpose |
+|-|-|
+| `ROLLHOOK_ADMIN_TOKEN` | Admin API — never leave the server |
+| `ROLLHOOK_WEBHOOK_TOKEN` | Deploy webhook — goes into GitHub repo secrets |
+
+---
+
 ## Security Invariants
 
 Never violate these:
 
-- No `ports:` for Postgres, Valkey, CrowdSec, Beszel, or Dozzle
+- No `ports:` for any service except OTel (4317/4318 Tailscale-reachable) and monitoring agents
+- Zero inbound ports on Hetzner Firewall — cloudflared is outbound-only, SSH via Tailscale only
 - No SSH rule in Hetzner Cloud Firewall (`scripts/firewall.sh`)
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
-- Postgres and Valkey: no auto-update via WUD — manual only
+- Postgres and Valkey: no auto-update via Watchtower — manual only
 
 ---
 
@@ -163,12 +206,11 @@ Never violate these:
 2. `sudo tailscale up`
 3. Set `ListenAddress` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
 4. `doppler login && doppler setup`
-5. `make firewall` → assign firewall to server in hcloud dashboard
-6. `make up`
-7. `make monitoring-up`
-8. `docker exec crowdsec cscli capi register`
-9. `docker exec crowdsec cscli bouncers add traefik-bouncer` → add key to Doppler
-10. `make up` (Traefik reloads with `CROWDSEC_BOUNCER_KEY`)
+5. Cloudflare dashboard → Zero Trust → Tunnels → Create tunnel → copy token to Doppler as `CLOUDFLARE_TUNNEL_TOKEN`
+6. `make firewall` → assign firewall to server in hcloud dashboard (zero inbound rules)
+7. `make up`
+8. `make monitoring-up`
+9. Cloudflare dashboard → tunnel → Public Hostnames → add `*.DOMAIN` → `https://traefik:443` (TLS verify: off)
 
 ---
 

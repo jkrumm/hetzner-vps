@@ -36,10 +36,6 @@ exporters:
     tls:
       insecure: true   # Internal Tailscale network, no public TLS needed
 
-  # Debug logging (disable in prod if too verbose)
-  debug:
-    verbosity: basic
-
 service:
   pipelines:
     traces:
@@ -58,6 +54,3 @@ service:
   telemetry:
     logs:
       level: warn
-    metrics:
-      address: 0.0.0.0:8888
-      level: none   # Disable internal metrics (reduce noise)

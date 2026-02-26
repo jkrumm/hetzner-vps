@@ -284,3 +284,13 @@ All monitoring dashboards are Tailscale-only — no public routes.
 | Traefik | `https://traefik.<your-domain>` | Router/service map, cert status |
 
 Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` middleware (IP allowlist: `100.64.0.0/10`).
+
+---
+
+## TODOs
+
+- **Private registry auth:** When pulling images from `registry.jkrumm.com`, add idempotent login to `setup.sh`:
+  ```bash
+  doppler secrets get ZOT_PASSWORD --plain | docker login registry.jkrumm.com -u jkrumm --password-stdin
+  ```
+  Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically, no changes to `compose.yml` needed.
