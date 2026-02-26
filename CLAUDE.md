@@ -7,36 +7,34 @@ Infrastructure-as-code for a Hetzner CX43 VPS (8 vCPU · 16 GB · 160 GB SSD · 
 ## Quick Reference
 
 ```bash
-# Networking stack (cloudflared, Traefik, socket-proxy)
-make networking-up
-make networking-down
-make logs-networking
+# Primary operations
+make up                  # start all stacks in order (networking → infra → monitoring)
+make down                # stop all stacks in reverse order
 
-# Infra stack (Postgres, Valkey)
-make infra-up
-make infra-down
-make logs-infra
+# Targeted restart (one stack)
+make networking-up / make networking-down
+make infra-up    / make infra-down
+make monitoring-up / make monitoring-down
 
-# Monitoring stack (OTel, Beszel, Dozzle, Watchtower)
-make monitoring-up
-make monitoring-down
-make logs-monitoring
-
-# All containers status
+# Status + ops
 make ps                  # docker ps with name/status/ports
-
-# DB
 make shell-postgres      # psql shell
 make backup              # manual pg_dump → S3
-
-# Ops
 make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
 
-# Deploy with Doppler (explicit form)
-doppler run -- docker compose -f compose.networking.yml up -d
-doppler run -- docker compose -f compose.infra.yml up -d
-doppler run -- docker compose -f compose.monitoring.yml up -d
+# Local dev
+make dev-up              # Postgres + Valkey with ports exposed, no Doppler
+make dev-down
 ```
+
+---
+
+## Skills
+
+| Skill | Context | Purpose |
+|-|-|-|
+| `/audit` | main | 7-phase health audit: resources, containers, tunnel, Tailscale, errors, backup, manual upgrades (Postgres + Valkey) |
+| `/docs` | main | Documentation maintenance — sync compose files against README/CLAUDE.md, verify .env.example coverage |
 
 ---
 
@@ -72,14 +70,15 @@ External networks (pre-created by `setup.sh`, referenced as `external: true`):
 | `proxy` | Traefik routing | Traefik, all apps |
 | `postgres-net` | Postgres access | Postgres, apps needing DB |
 | `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
-| `monitoring-net` | Observability bus | OTel, CrowdSec, Beszel, Dozzle, apps sending OTel |
+| `monitoring-net` | Observability bus | OTel, Beszel, Dozzle, apps sending OTel |
 
 Internal networks (created by Docker Compose, not external):
 
 | Network | Purpose |
 |-|-|
-| `socket-proxy-net` | Traefik → docker-socket-proxy (read-only, POST=0) |
+| `socket-proxy-net` | Traefik → socket-proxy (read-only, POST=0) |
 | `socket-proxy-watchtower-net` | Watchtower → socket-proxy-watchtower (POST=1, write access) |
+| `socket-proxy-monitoring-net` | Dozzle + Beszel → socket-proxy-monitoring (read-only, LOGS+STATS) |
 
 **Traffic routing model:**
 
@@ -101,9 +100,10 @@ Internal networks (created by Docker Compose, not external):
 ```
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy)
 compose.infra.yml             Databases (Postgres, Valkey)
-compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower, socket-proxy-watchtower)
-traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare), plugin
-traefik/dynamic/middlewares.yml  CrowdSec bouncer, rate-limit, security-headers, tailscale-only
+compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower + two socket-proxy instances)
+compose.dev.yml               Local dev (Postgres + Valkey with ports exposed, no Doppler)
+traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
+traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
 otel/config.yaml              OTLP receiver → batch processor → SigNoz exporter (Tailscale)
 scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron)
@@ -219,9 +219,7 @@ Never violate these:
 4. `doppler login && doppler setup`
 5. Cloudflare dashboard → Zero Trust → Tunnels → Create tunnel → copy token to Doppler as `CLOUDFLARE_TUNNEL_TOKEN`
 6. `make firewall` → assign firewall to server in hcloud dashboard (zero inbound rules)
-7. `make networking-up`
-8. `make infra-up`
-9. `make monitoring-up`
+7. `make up`
 10. Cloudflare dashboard → tunnel → Public Hostnames → add `*.DOMAIN` → `https://traefik:443` (TLS verify: off)
 
 ---

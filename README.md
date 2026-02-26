@@ -1,35 +1,34 @@
 # hetzner-vps
 
-Production Docker Compose stack for a Hetzner CX43 (8 vCPU · 16 GB · 160 GB SSD · Ubuntu 24.04). Single-node, no orchestration, no complexity. Traefik in front, Postgres + Valkey behind, CrowdSec for threat protection, full observability routed to homelab via Tailscale.
+Production Docker Compose stack for a Hetzner CX43 (8 vCPU · 16 GB · 160 GB SSD · Ubuntu 24.04). Single-node, no orchestration. Cloudflare Tunnel handles all public ingress — zero inbound ports on the server. Three compose stacks by concern: networking, infra, monitoring.
 
 ---
 
 ## Quick Reference
 
 ```bash
-# Daily operations
-make up              # start core infra
-make monitoring-up   # start monitoring stack
-make down            # stop core infra
+# Primary operations
+make up              # start all stacks (networking → infra → monitoring)
+make down            # stop all stacks (reverse order)
 make ps              # container status
-make logs            # follow core logs
-make backup          # manual pg_dump → S3
-make shell-postgres  # psql into Postgres
-make firewall        # reapply Hetzner Cloud Firewall rules
 
-# CrowdSec
-docker exec crowdsec cscli decisions list         # see blocked IPs
-docker exec crowdsec cscli alerts list            # see recent alerts
-docker exec crowdsec cscli metrics                # detection stats
-docker exec crowdsec cscli bouncers list          # verify bouncer connected
+# Targeted restart (one stack)
+make monitoring-up
+make monitoring-down
 
 # Postgres
-doppler run -- docker compose pull postgres       # pull new image (check WUD first)
-doppler run -- docker compose up -d postgres      # restart after image update
+make backup          # manual pg_dump → S3
+make shell-postgres  # psql shell
+
+# Ops
+make firewall        # reapply Hetzner Cloud Firewall rules
 
 # Traefik cert debug
-docker exec traefik traefik version
-docker logs traefik 2>&1 | grep -i acme           # cert issuance logs
+docker logs traefik 2>&1 | grep -i acme
+
+# Local dev (Postgres + Valkey, ports exposed, no Doppler)
+make dev-up
+make dev-down
 ```
 
 **Internal hostnames (container-to-container):**
@@ -40,7 +39,6 @@ docker logs traefik 2>&1 | grep -i acme           # cert issuance logs
 | Valkey/Redis | `redis` | `6379` |
 | OTel Collector (gRPC) | `otel-collector` | `4317` |
 | OTel Collector (HTTP) | `otel-collector` | `4318` |
-| CrowdSec LAPI | `crowdsec` | `8080` |
 
 **External Docker networks (apps join these):**
 
@@ -57,24 +55,22 @@ docker logs traefik 2>&1 | grep -i acme           # cert issuance logs
 
 ```
 Internet
-  │ :80/:443
-Hetzner Cloud Firewall ── allow 80, 443 only (IaC: scripts/firewall.sh)
   │
-UFW ── second layer: allow 80/443 + all tailscale0, deny rest
+Cloudflare edge (Tunnel — outbound-only from VPS, zero inbound ports)
+  │
+cloudflared (compose.networking.yml)
   │
 Traefik v3
-  ├─ HTTP→HTTPS redirect (entrypoint: web)
   ├─ Wildcard TLS via Cloudflare DNS-01 ACME (*.yourdomain.com)
-  ├─ Middleware chain on all routers: CrowdSec → rate-limit → security-headers
+  ├─ Middleware chain: rate-limit → security-headers
+  ├─ Traefik dashboard (tailscale-only IP allowlist)
   ├─ app-1  (network: proxy)
   └─ app-2  (network: proxy)
 
 Internal networks — never exposed publicly:
   postgres-net  ── postgres:5432
   valkey-net    ── redis:6379          (Valkey 9, hostname aliased to "redis")
-  crowdsec-net  ── crowdsec:8080       (Traefik bouncer ↔ CrowdSec LAPI only)
   monitoring-net
-    ├─ crowdsec          reads Traefik access logs, community IP blocklists
     ├─ otel-collector    receives OTLP → forwards to SigNoz on homelab
     ├─ beszel-agent      pushes server + container metrics → Beszel hub
     └─ dozzle            streams container logs → Dozzle hub
@@ -83,8 +79,10 @@ Homelab connectivity: Tailscale
   VPS → SigNoz, Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
   SSH → Tailscale only (sshd ListenAddress bound to tailscale0, port 22 firewalled)
 
-WUD: watches all containers via docker-socket-proxy, Pushover on MINOR updates
-     Postgres + Valkey: notify-only (deliberate manual upgrades)
+Docker API access — no direct docker.sock mounts:
+  socket-proxy             (read-only)  → Traefik
+  socket-proxy-watchtower  (POST=1)     → Watchtower
+  socket-proxy-monitoring  (read-only)  → Dozzle + Beszel
 ```
 
 ---
@@ -93,35 +91,35 @@ WUD: watches all containers via docker-socket-proxy, Pushover on MINOR updates
 
 | Service | Image | Purpose | Update policy |
 |-|-|-|-|
-| socket-proxy | tecnativa/docker-socket-proxy | Read-only Docker API for Traefik + WUD | MINOR auto |
-| traefik | traefik:v3 | Reverse proxy, TLS termination | MINOR auto |
-| postgres | postgres:18 | Primary DB — pinned major version | **notify only** |
-| valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **notify only** |
-| crowdsec | crowdsecurity/crowdsec | IP blocklists + behavioral detection | MINOR auto |
-| otel-collector | otel/opentelemetry-collector-contrib | OTLP pipeline → SigNoz | MINOR auto |
-| beszel-agent | henrygd/beszel-agent | Server metrics agent | MINOR auto |
-| dozzle | amir20/dozzle | Log streaming agent | MINOR auto |
-| wud | fmartinou/whats-up-docker | Update tracking, Pushover alerts | MINOR auto |
+| cloudflared | cloudflare/cloudflared | Public ingress via Cloudflare Tunnel | auto |
+| socket-proxy | tecnativa/docker-socket-proxy | Read-only Docker API for Traefik | auto |
+| traefik | traefik:v3 | Reverse proxy, TLS termination | auto |
+| postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
+| valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
+| otel-collector | otel/opentelemetry-collector-contrib | OTLP pipeline → SigNoz | auto |
+| beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
+| dozzle | amir20/dozzle | Log streaming agent | auto |
+| socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |
+| socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | auto |
+| watchtower | containrrr/watchtower | Auto-updates containers, Pushover on failure | auto |
 
 ---
 
 ## Design Decisions
 
-**Cloudflare DNS, no proxy.** Domain and DNS managed at Cloudflare (grey cloud). Direct internet → VPS. DNS-01 ACME challenge issues a single wildcard cert (`*.yourdomain.com`) covering all subdomains — no per-service cert management. Toggle orange cloud per-subdomain later if CDN/DDoS proxy is ever needed.
+**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Hetzner Firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.yourdomain.com`) — required so cloudflared can verify the TLS handshake with Traefik internally.
 
-**CrowdSec over fail2ban.** Fail2ban parses logs reactively per-host. CrowdSec adds community threat intelligence (shared blocklists) and behavioral detection, runs natively as a Docker container, integrates directly as a Traefik plugin, and uses Valkey as its cache backend. Zero added complexity for substantially better protection.
+**Three socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. Watchtower gets a dedicated proxy with POST=1 on an isolated network — write access isolated from the others.
 
-**Two separate firewalls.** Hetzner Cloud Firewall blocks at the network edge (before traffic reaches the VM). UFW is the host-level second layer. Non-redundant: different enforcement points, different failure modes.
+**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only. Port 22 is absent from both Hetzner Firewall and UFW. Zero SSH attack surface from the public internet.
 
-**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only. Port 22 is absent from both Hetzner Firewall rules and UFW. Zero SSH attack surface from the public internet.
+**Watchtower over WUD.** Auto-updates all containers except Postgres and Valkey (opted out via label). Pushover notifications at warn level (failures only — not every update). Postgres and Valkey are excluded: major version bumps can have data format implications, updates must be deliberate with a backup first.
 
-**No Terraform.** Hetzner Firewall managed as a hcloud CLI script (`scripts/firewall.sh`). DNS managed in the Cloudflare UI. State management overhead of Terraform isn't justified for a single-server solo setup.
+**`container_name: redis` for Valkey.** Every app references `redis:6379` without modification.
 
-**WUD over Watchtower.** Watchtower is fire-and-forget with no visibility. WUD provides a dashboard, semver-aware filtering, and per-container notification control. Postgres and Valkey are set to notify-only: even minor version bumps can have data format implications — updates should be deliberate, with a backup run first.
+**Doppler for secrets.** All sensitive values in Doppler project `hetzner-vps`, config `prd`. Zero secrets in the repo. Variable names documented in `.env.example`. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
 
-**`container_name: redis` for Valkey.** Every app can reference `redis:6379` without modification.
-
-**Doppler for secrets.** All sensitive values live in Doppler project `hetzner-vps`, config `prd`. The repo contains zero actual secrets. Variable names are documented in `.env.example`. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
+**No Terraform.** Hetzner Firewall managed via hcloud CLI script (`scripts/firewall.sh`). Single-server setup doesn't justify state management overhead.
 
 ---
 
@@ -138,15 +136,14 @@ bash /home/jkrumm/hetzner-vps/scripts/setup.sh
 
 Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, Doppler, hcloud, Tailscale), creates external Docker networks, drops the cron job for Postgres backups.
 
-### 2. Post-setup (manual, as jkrumm)
+### 2. Post-setup (as jkrumm)
 
 ```bash
 # Connect to Tailscale — required before locking down SSH
 sudo tailscale up
 
 # Bind sshd to Tailscale interface only
-# Edit /etc/ssh/sshd_config.d/99-hardening.conf
-# Uncomment and set: ListenAddress <tailscale-ip>
+# Edit /etc/ssh/sshd_config.d/99-hardening.conf → set ListenAddress <tailscale-ip>
 sudo systemctl restart sshd
 # ⚠ Verify Tailscale SSH works before closing this session
 
@@ -156,23 +153,12 @@ doppler login && doppler setup   # project: hetzner-vps, config: prd
 # Apply cloud firewall, then assign to server in hcloud dashboard
 cd ~/hetzner-vps && make firewall
 
-# Start stacks
+# Cloudflare dashboard → Zero Trust → Tunnels → create tunnel → copy token to Doppler as CLOUDFLARE_TUNNEL_TOKEN
+
+# Start everything
 make up
-make monitoring-up
-```
 
-### 3. CrowdSec one-time setup
-
-```bash
-# Register with CrowdSec Central API (community threat intel)
-docker exec crowdsec cscli capi register
-
-# Add Traefik bouncer and capture the generated key
-docker exec crowdsec cscli bouncers add traefik-bouncer
-# → copy the key to Doppler as CROWDSEC_BOUNCER_KEY
-
-# Reload Traefik to pick up the key
-make up
+# Cloudflare dashboard → tunnel → Public Hostnames → *.DOMAIN → https://traefik:443 (TLS verify: off)
 ```
 
 ---
@@ -185,13 +171,13 @@ Doppler project `hetzner-vps`, config `prd`. Full list in `.env.example`.
 |-|-|
 | `DOMAIN` | Apex domain — wildcard cert covers `*.DOMAIN` |
 | `ACME_EMAIL` | Let's Encrypt registration email |
-| `CF_DNS_API_TOKEN` | Cloudflare token with `Zone:DNS:Edit` scope |
+| `CF_DNS_API_TOKEN` | Cloudflare token with `Zone:DNS:Edit` scope (DNS-01 challenge) |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Tunnel token from Cloudflare dashboard → Zero Trust → Tunnels |
 | `POSTGRES_DB/USER/PASSWORD` | Database credentials |
-| `CROWDSEC_BOUNCER_KEY` | Generated by `cscli bouncers add` |
 | `AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY` | Object storage credentials |
 | `AWS_S3_BUCKET/ENDPOINT` | Backup destination |
 | `UPTIME_KUMA_PUSH_URL` | Heartbeat push URL for backup monitor |
-| `WUD_TRIGGER_PUSHOVER_TOKEN/USER` | Pushover app token + user key |
+| `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Pushover app token + user key |
 | `BESZEL_AGENT_KEY` | SSH public key from Beszel hub |
 | `SIGNOZ_OTLP_ENDPOINT` | `<tailscale-ip>:4317` of homelab SigNoz |
 
@@ -212,16 +198,25 @@ networks:
 
 services:
   myapp:
-    image: ghcr.io/jkrumm/myapp:latest
-    networks: [proxy, postgres-net, monitoring-net]
+    image: ${IMAGE_TAG:-ghcr.io/jkrumm/myapp:latest}
+    # NO container_name — RollHook must scale to 2 instances during rollout
+    # NO ports — Traefik routes via Docker DNS; ports prevent scaling
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:3000/health]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.myapp.rule=Host(`app.<your-domain>`)"
       - "traefik.http.routers.myapp.entrypoints=websecure"
       - "traefik.http.routers.myapp.tls.certresolver=letsencrypt"
       - "traefik.http.services.myapp.loadbalancer.server.port=3000"
-      - "traefik.http.routers.myapp.middlewares=crowdsec@file,rate-limit@file,security-headers@file"
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "traefik.http.routers.myapp.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.myapp.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.myapp.loadbalancer.healthcheck.interval=5s"
+    networks: [proxy, postgres-net, monitoring-net]
     security_opt: [no-new-privileges:true]
     logging:
       driver: json-file
@@ -234,7 +229,7 @@ services:
 
 Deploy: `doppler run -- docker compose up -d`
 
-**Hostname summary:** `postgres:5432`, `redis:6379`, `otel-collector:4317` (gRPC) or `:4318` (HTTP). OTel requires joining `monitoring-net`.
+See `CLAUDE.md` → RollHook section for zero-downtime deployment constraints.
 
 ---
 
@@ -244,7 +239,7 @@ Daily cron at 03:00 via `/etc/cron.d/pg-backup`. Triggers `scripts/backup-pg.sh`
 1. Runs `pg_dump` in a one-shot `postgres:18` container
 2. Streams compressed dump (`-Fc --compress=9`) to object storage via awscli
 3. Prunes backups older than 14 days
-4. Pings Uptime Kuma push monitor (`UPTIME_KUMA_PUSH_URL`) — status `up` or `down`
+4. Pings Uptime Kuma push monitor — status `up` or `down`
 
 ```bash
 make backup                                                    # manual trigger
@@ -257,9 +252,9 @@ BACKUP_FILE=postgres_mydb_20260224_030000.dump \
 
 ## Upgrading Postgres or Valkey
 
-Watchtower notifies via Pushover on failures. Postgres and Valkey are excluded from auto-updates — apply manually.
+Both are excluded from Watchtower auto-updates. Apply manually.
 
-**Patch/minor upgrade (same major):**
+**Patch/minor (same major):**
 ```bash
 make backup
 doppler run -- docker compose -f compose.infra.yml pull postgres   # or valkey
@@ -267,13 +262,13 @@ doppler run -- docker compose -f compose.infra.yml up -d postgres
 make shell-postgres   # verify: SELECT version();
 ```
 
-**Postgres major upgrade (e.g., 18 → 19):** Use `pg_upgrade` or dump/restore via `scripts/restore-pg.sh`. Update the image tag in `compose.infra.yml` and add a comment with the upgrade date.
+**Postgres major upgrade (e.g., 18 → 19):** Dump with current version, update image tag in `compose.infra.yml`, restore into new container via `scripts/restore-pg.sh`. Always backup first.
 
 ---
 
 ## Monitoring
 
-All monitoring dashboards are Tailscale-only — no public routes.
+All dashboards are Tailscale-only — no public routes.
 
 | Tool | Access | What it shows |
 |-|-|-|
@@ -293,4 +288,4 @@ Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` m
   ```bash
   doppler secrets get ZOT_PASSWORD --plain | docker login registry.jkrumm.com -u jkrumm --password-stdin
   ```
-  Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically, no compose changes needed.
+  Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically.
