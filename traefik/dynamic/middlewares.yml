@@ -1,23 +1,8 @@
 ## Traefik dynamic configuration — middlewares
-## Applied via labels: traefik.http.routers.<name>.middlewares=crowdsec@file,rate-limit@file,security-headers@file
+## Applied via labels: traefik.http.routers.<name>.middlewares=rate-limit@file,security-headers@file
 
 http:
   middlewares:
-
-    # CrowdSec bouncer — blocks IPs flagged by community intelligence.
-    # Requires crowdsec container running and CROWDSEC_BOUNCER_KEY in env.
-    crowdsec:
-      plugin:
-        crowdsec-bouncer-traefik-plugin:
-          enabled: true
-          logLevel: WARN
-          crowdsecMode: live
-          crowdsecLapiHost: crowdsec:8080
-          crowdsecLapiKeyEnvironmentVariableName: CROWDSEC_BOUNCER_KEY
-          # Use Valkey (redis) as cache backend (database 1, keep db 0 for apps)
-          redisCacheEnabled: "true"
-          redisCacheHost: "redis:6379"
-          redisCacheDatabase: "1"
 
     # Rate limiting — per source IP.
     # Built-in Traefik middleware, no external dependency.
@@ -42,9 +27,8 @@ http:
         customFrameOptionsValue: "SAMEORIGIN"
 
     # Tailscale-only — restrict access to Tailscale CGNAT range (100.64.0.0/10).
-    # Applied to all internal dashboards (Traefik, WUD).
-    # This is the sole auth mechanism for dashboards — Tailscale membership IS the auth.
-    # Basic auth is intentionally omitted: redundant for a personal tailnet and
+    # Applied to internal dashboards (Traefik). Tailscale membership IS the auth.
+    # Basic auth intentionally omitted: redundant for a personal tailnet and
     # dynamic config files don't support ${ENV_VAR} substitution anyway.
     tailscale-only:
       ipAllowList:

@@ -12,11 +12,8 @@ api:
 
 log:
   level: WARN
-  filePath: /var/log/traefik/traefik.log
 
 accessLog:
-  # Log ALL requests — CrowdSec needs full access logs to detect behavioral patterns.
-  # Filtering to 4xx/5xx would blind CrowdSec to successful attack patterns (e.g. brute force).
   filePath: /var/log/traefik/access.log
   bufferingSize: 100
 
@@ -59,9 +56,3 @@ providers:
   file:
     directory: /etc/traefik/dynamic
     watch: true
-
-experimental:
-  plugins:
-    crowdsec-bouncer-traefik-plugin:
-      moduleName: "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
-      version: "v1.3.5"
