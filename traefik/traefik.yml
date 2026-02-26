@@ -3,8 +3,8 @@
 ##
 ## NOTE: This file does NOT support ${ENV_VAR} substitution.
 ## Domain-specific config (wildcard cert domains, ACME email) is handled via:
-##   - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL env var in compose.yml
-##   - tls.domains labels on the dashboard router in compose.yml
+##   - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL env var in compose.networking.yml
+##   - tls.domains labels on the dashboard router in compose.networking.yml
 
 api:
   dashboard: true
@@ -33,14 +33,14 @@ entryPoints:
       tls:
         certResolver: letsencrypt
         # Wildcard domain is requested via tls.domains labels on the dashboard router.
-        # See compose.yml: traefik.http.routers.dashboard.tls.domains[0].*
+        # See compose.networking.yml: traefik.http.routers.dashboard.tls.domains[0].*
       middlewares:
         - security-headers@file
 
 certificatesResolvers:
   letsencrypt:
     acme:
-      # email set via TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL env var in compose.yml
+      # email set via TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL env var in compose.networking.yml
       storage: /etc/traefik/acme.json
       dnsChallenge:
         provider: cloudflare

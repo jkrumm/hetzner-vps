@@ -1,20 +1,29 @@
 # hetzner-vps
 
-Infrastructure-as-code for a Hetzner CX43 VPS (8 vCPU · 16 GB · 160 GB SSD · Ubuntu 24.04). Docker Compose only. No Swarm, no Kubernetes. Two compose files: `compose.yml` (core infra, always running) and `compose.monitoring.yml` (observability + update tracking).
+Infrastructure-as-code for a Hetzner CX43 VPS (8 vCPU · 16 GB · 160 GB SSD · Ubuntu 24.04). Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking, infra (databases), and monitoring.
 
 ---
 
 ## Quick Reference
 
 ```bash
-# Infra
-make up                  # doppler run -- docker compose up -d
-make down
-make monitoring-up       # doppler run -- docker compose -f compose.monitoring.yml up -d
+# Networking stack (cloudflared, Traefik, socket-proxy)
+make networking-up
+make networking-down
+make logs-networking
+
+# Infra stack (Postgres, Valkey)
+make infra-up
+make infra-down
+make logs-infra
+
+# Monitoring stack (OTel, Beszel, Dozzle, Watchtower)
+make monitoring-up
 make monitoring-down
-make ps                  # docker ps with name/status/ports
-make logs                # follow core stack logs
 make logs-monitoring
+
+# All containers status
+make ps                  # docker ps with name/status/ports
 
 # DB
 make shell-postgres      # psql shell
@@ -24,7 +33,8 @@ make backup              # manual pg_dump → S3
 make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
 
 # Deploy with Doppler (explicit form)
-doppler run -- docker compose up -d
+doppler run -- docker compose -f compose.networking.yml up -d
+doppler run -- docker compose -f compose.infra.yml up -d
 doppler run -- docker compose -f compose.monitoring.yml up -d
 ```
 
@@ -82,14 +92,15 @@ Internal networks (created by Docker Compose, not external):
 
 **Key gotcha:** `traefik.yml` static config does NOT support `${ENV_VAR}` substitution. Domain-specific config uses two workarounds:
 - ACME email → `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on the Traefik container
-- Wildcard cert domains → `tls.domains` labels on the dashboard router in `compose.yml` (Docker Compose DOES substitute `${DOMAIN}` in labels)
+- Wildcard cert domains → `tls.domains` labels on the dashboard router in `compose.networking.yml` (Docker Compose DOES substitute `${DOMAIN}` in labels)
 
 ---
 
 ## File Map
 
 ```
-compose.yml                   Core infra (cloudflared, Traefik, Postgres, Valkey, socket-proxy)
+compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy)
+compose.infra.yml             Databases (Postgres, Valkey)
 compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower, socket-proxy-watchtower)
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare), plugin
 traefik/dynamic/middlewares.yml  CrowdSec bouncer, rate-limit, security-headers, tailscale-only
@@ -208,9 +219,10 @@ Never violate these:
 4. `doppler login && doppler setup`
 5. Cloudflare dashboard → Zero Trust → Tunnels → Create tunnel → copy token to Doppler as `CLOUDFLARE_TUNNEL_TOKEN`
 6. `make firewall` → assign firewall to server in hcloud dashboard (zero inbound rules)
-7. `make up`
-8. `make monitoring-up`
-9. Cloudflare dashboard → tunnel → Public Hostnames → add `*.DOMAIN` → `https://traefik:443` (TLS verify: off)
+7. `make networking-up`
+8. `make infra-up`
+9. `make monitoring-up`
+10. Cloudflare dashboard → tunnel → Public Hostnames → add `*.DOMAIN` → `https://traefik:443` (TLS verify: off)
 
 ---
 
@@ -219,9 +231,9 @@ Never violate these:
 **Patch/minor (same major):**
 ```bash
 make backup
-doppler run -- docker compose pull <service>
-doppler run -- docker compose up -d <service>
+doppler run -- docker compose -f compose.infra.yml pull <service>
+doppler run -- docker compose -f compose.infra.yml up -d <service>
 ```
 
 **Postgres major version (e.g., 18 → 19):**
-Use `scripts/restore-pg.sh` pattern: dump from old, update image tag in `compose.yml`, restore into new. Or use `pg_upgrade` in place. Always test on a copy first.
+Use `scripts/restore-pg.sh` pattern: dump from old, update image tag in `compose.infra.yml`, restore into new. Or use `pg_upgrade` in place. Always test on a copy first.

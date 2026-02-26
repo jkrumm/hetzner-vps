@@ -257,17 +257,17 @@ BACKUP_FILE=postgres_mydb_20260224_030000.dump \
 
 ## Upgrading Postgres or Valkey
 
-WUD notifies via Pushover when new versions are available. Do not auto-apply.
+Watchtower notifies via Pushover on failures. Postgres and Valkey are excluded from auto-updates — apply manually.
 
 **Patch/minor upgrade (same major):**
 ```bash
 make backup
-doppler run -- docker compose pull postgres   # or valkey
-doppler run -- docker compose up -d postgres
+doppler run -- docker compose -f compose.infra.yml pull postgres   # or valkey
+doppler run -- docker compose -f compose.infra.yml up -d postgres
 make shell-postgres   # verify: SELECT version();
 ```
 
-**Postgres major upgrade (e.g., 18 → 19):** Use `pg_upgrade` or dump/restore via `scripts/restore-pg.sh`. Update the image tag in `compose.yml` and add a comment with the upgrade date.
+**Postgres major upgrade (e.g., 18 → 19):** Use `pg_upgrade` or dump/restore via `scripts/restore-pg.sh`. Update the image tag in `compose.infra.yml` and add a comment with the upgrade date.
 
 ---
 
@@ -280,7 +280,7 @@ All monitoring dashboards are Tailscale-only — no public routes.
 | Beszel | homelab Beszel hub | CPU, RAM, disk, network per container |
 | Dozzle | homelab Dozzle hub | Live container logs |
 | SigNoz | homelab SigNoz | Traces, metrics, logs (OTLP) |
-| WUD | `http://<tailscale-ip>:3000` | Container update status |
+| Watchtower | Pushover only (warn level) | Container update failures |
 | Traefik | `https://traefik.<your-domain>` | Router/service map, cert status |
 
 Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` middleware (IP allowlist: `100.64.0.0/10`).
@@ -293,4 +293,4 @@ Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` m
   ```bash
   doppler secrets get ZOT_PASSWORD --plain | docker login registry.jkrumm.com -u jkrumm --password-stdin
   ```
-  Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically, no changes to `compose.yml` needed.
+  Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically, no compose changes needed.

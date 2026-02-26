@@ -1,7 +1,7 @@
 ---
 # Monitoring stack
 # Deploy: doppler run -- docker compose -f compose.monitoring.yml up -d
-# Requires core stack (compose.yml) to be running first.
+# Requires networking + infra stacks to be running first.
 
 networks:
   monitoring-net:
