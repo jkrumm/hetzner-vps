@@ -10,29 +10,19 @@ networks:
     external: true
   valkey-net:
     external: true
-  monitoring-net:
-    external: true
   socket-proxy-net:
-    driver: bridge
-    internal: true
-  # crowdsec-net: Traefik's bouncer plugin (inside Traefik) must reach CrowdSec LAPI.
-  # This dedicated internal network connects only Traefik + CrowdSec.
-  crowdsec-net:
     driver: bridge
     internal: true
 
 volumes:
   postgres-data:
   valkey-data:
-  traefik-logs:
-  crowdsec-data:
-  crowdsec-config:
 
 services:
 
   # ---------------------------------------------------------------------------
   # Docker socket proxy — restricts Docker API access to read-only operations.
-  # Traefik and WUD connect here instead of mounting docker.sock directly.
+  # Traefik connects here instead of mounting docker.sock directly.
   # ---------------------------------------------------------------------------
   socket-proxy:
     image: tecnativa/docker-socket-proxy:latest
@@ -57,7 +47,29 @@ services:
       options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
+  # Cloudflare Tunnel — all public ingress flows through here.
+  # No ports exposed to the internet; cloudflared makes outbound connections
+  # to Cloudflare edge only. Configure public hostnames in Cloudflare dashboard:
+  #   *.DOMAIN → https://traefik:443  (TLS verify: disabled — internal cert)
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
   # Traefik v3 — reverse proxy + HTTPS via Cloudflare DNS-01 wildcard cert.
+  # No ports exposed — cloudflared routes traffic to traefik:443 internally.
   # Entrypoints: web (:80, redirect to websecure) + websecure (:443, TLS).
   # ---------------------------------------------------------------------------
   traefik:
@@ -65,24 +77,17 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    ports:
-      - "80:80"
-      - "443:443"
     environment:
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
       # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
-      # CrowdSec bouncer key: read by plugin via crowdsecLapiKeyEnvironmentVariableName
-      CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY}
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - ./traefik/acme.json:/etc/traefik/acme.json
-      - traefik-logs:/var/log/traefik
     networks:
       - proxy
       - socket-proxy-net
-      - crowdsec-net    # bouncer plugin inside Traefik calls crowdsec:8080 over this network
     labels:
       # Traefik dashboard — restricted to Tailscale IP range via middleware
       - "traefik.enable=true"
@@ -94,8 +99,6 @@ services:
       # Request wildcard cert via DNS-01 — Docker Compose substitutes ${DOMAIN} in labels ✓
       - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
       - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
-      # WUD: track this container for updates
-      - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -125,9 +128,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # WUD: watch for updates, notify only (WUD never auto-updates without a Docker trigger)
+    # Watchtower: excluded from auto-updates — update manually (backup first)
     labels:
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "com.centurylinklabs.watchtower.enable=false"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -149,43 +152,14 @@ services:
       - valkey-data:/data
     networks:
       - valkey-net
-      - monitoring-net    # CrowdSec uses Valkey as bouncer cache (db 1)
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
-    # WUD: watch for updates, notify only
+    # Watchtower: excluded from auto-updates — update manually
     labels:
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "com.centurylinklabs.watchtower.enable=false"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
-
-  # ---------------------------------------------------------------------------
-  # CrowdSec — application-layer threat protection.
-  # Reads Traefik access logs, uses community IP blocklists.
-  # Traefik bouncer plugin connects to LAPI at crowdsec:8080.
-  # Post-deploy: cscli capi register + cscli collections install crowdsecurity/traefik
-  # ---------------------------------------------------------------------------
-  crowdsec:
-    image: crowdsecurity/crowdsec:latest
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 256m
-    environment:
-      COLLECTIONS: "crowdsecurity/traefik"
-      CUSTOM_HOSTNAME: hetzner-vps
-    volumes:
-      - crowdsec-data:/var/lib/crowdsec/data
-      - crowdsec-config:/etc/crowdsec
-      - traefik-logs:/var/log/traefik:ro
-    networks:
-      - monitoring-net
-      - crowdsec-net    # Traefik bouncer reaches LAPI via crowdsec-net
-    labels:
-      - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }

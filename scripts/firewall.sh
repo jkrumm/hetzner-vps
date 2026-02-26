@@ -4,6 +4,11 @@
 # Idempotent: creates or replaces rules on the named firewall.
 # Requires: hcloud CLI authenticated (hcloud auth login or HCLOUD_TOKEN env var)
 # Usage: ./scripts/firewall.sh
+#
+# Zero inbound rules — this is intentional:
+#   - Public HTTP/HTTPS traffic enters via Cloudflare Tunnel (outbound from VPS)
+#   - SSH is accessible via Tailscale only (no public SSH rule)
+#   - All inbound TCP/UDP from the internet is blocked by default
 # =============================================================================
 set -euo pipefail
 
@@ -29,29 +34,14 @@ if ! hcloud firewall describe "${FIREWALL_NAME}" &>/dev/null; then
   hcloud firewall create --name "${FIREWALL_NAME}"
 fi
 
-# Apply rules (replace-rules is idempotent)
+# Zero inbound rules — all public ingress goes through Cloudflare Tunnel
 hcloud firewall replace-rules "${FIREWALL_NAME}" \
   --rules-file - << 'RULES'
-[
-  {
-    "direction": "in",
-    "port": "80",
-    "protocol": "tcp",
-    "source_ips": ["0.0.0.0/0", "::/0"],
-    "description": "HTTP (Traefik redirect to HTTPS)"
-  },
-  {
-    "direction": "in",
-    "port": "443",
-    "protocol": "tcp",
-    "source_ips": ["0.0.0.0/0", "::/0"],
-    "description": "HTTPS (Traefik)"
-  }
-]
+[]
 RULES
 
-echo "Firewall rules applied."
-echo "Note: SSH is NOT exposed publicly. Access via Tailscale only."
+echo "Firewall rules applied (zero inbound — deny all)."
+echo "Note: SSH via Tailscale only. Public traffic via Cloudflare Tunnel only."
 echo ""
 echo "To apply this firewall to your server:"
 echo "  hcloud firewall apply-to-resource --type server --server <server-name> ${FIREWALL_NAME}"
