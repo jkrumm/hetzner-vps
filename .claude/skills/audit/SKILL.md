@@ -44,7 +44,7 @@ ssh vps "docker system df"
 ```
 
 **Expected running containers:**
-- Networking: `cloudflared`, `traefik`, `socket-proxy`
+- Networking: `cloudflared`, `traefik`, `socket-proxy`, `socket-proxy-rollhook`, `rollhook`
 - Infra: `postgres`, `redis`
 - Monitoring: `otel-collector`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`
 
@@ -163,7 +163,7 @@ For each CRITICAL/WARN finding, propose the fix and ask for confirmation before 
 
 | Finding | Proposed Fix |
 |-|-|
-| Container not running (networking) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d <name>"` |
+| Container not running (networking/rollhook) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d <name>"` |
 | Container not running (infra) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.infra.yml up -d <name>"` |
 | Container not running (monitoring) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.monitoring.yml up -d <name>"` |
 | Container restart count >3 | Show `docker logs <name> --tail=20`, offer restart via appropriate stack |
