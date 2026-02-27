@@ -158,6 +158,8 @@ services:
     volumes:
       - ./config/rollhook/rollhook.config.yaml:/app/rollhook.config.yaml:ro
       - rollhook-data:/app/data
+      # Docker registry credentials — required for pulling from private registry
+      - /home/jkrumm/.docker/config.json:/root/.docker/config.json:ro
       # Mount app compose files — one volume per app managed by RollHook
       - /home/jkrumm/hetzner-vps/apps/rollhook-marketing:/home/jkrumm/hetzner-vps/apps/rollhook-marketing:ro
 
