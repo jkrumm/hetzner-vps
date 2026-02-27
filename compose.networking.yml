@@ -158,8 +158,8 @@ services:
     volumes:
       - ./config/rollhook/rollhook.config.yaml:/app/rollhook.config.yaml:ro
       - rollhook-data:/app/data
-      # docker compose plugin — required for rolling deployments
-      - /usr/lib/docker/cli-plugins/docker-compose:/usr/local/lib/docker/cli-plugins/docker-compose:ro
+      # docker compose plugin — required for rolling deployments (Ubuntu path: /usr/libexec/)
+      - /usr/libexec/docker/cli-plugins/docker-compose:/usr/local/lib/docker/cli-plugins/docker-compose:ro
     healthcheck:
       test: [CMD, bun, -e, "fetch('http://localhost:7700/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s

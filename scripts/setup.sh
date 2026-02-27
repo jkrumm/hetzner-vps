@@ -175,6 +175,7 @@ else
     https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update -qq
+  # compose plugin installs to /usr/libexec/docker/cli-plugins/docker-compose on Ubuntu 24.04
   apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   usermod -aG docker "${DEPLOY_USER}"
 fi
