@@ -63,7 +63,7 @@ Key variables:
 | `CF_TUNNEL_ID` | VPS tunnel UUID — used by `scripts/cf-tunnel-ingress.sh` |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
-| `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Watchtower → Pushover via shoutrrr |
+| `NTFY_TOKEN` | Watchtower → ntfy (`ntfy.jkrumm.com/vps-watchtower`) via shoutrrr |
 | `ROLLHOOK_ADMIN_TOKEN/WEBHOOK_TOKEN` | RollHook API auth — copy from homelab Doppler |
 | `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — copy from homelab Doppler |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |

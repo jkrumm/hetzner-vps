@@ -258,12 +258,11 @@ Apps create their own users and databases on top of this superuser.
 | `AWS_S3_ENDPOINT` | `https://...` | Provider endpoint URL (e.g. Hetzner Object Storage) |
 | `UPTIME_KUMA_PUSH_URL` | `https://...` | Uptime Kuma → Add monitor → Push type → copy URL |
 
-**Watchtower (Pushover notifications)**
+**Watchtower (ntfy notifications)**
 
 | Variable | Value | How to get |
 |-|-|-|
-| `WATCHTOWER_PUSHOVER_TOKEN` | `<token>` | [pushover.net](https://pushover.net) → Create application → API token |
-| `WATCHTOWER_PUSHOVER_USER_KEY` | `<key>` | [pushover.net](https://pushover.net) → Your user key (top of dashboard) |
+| `NTFY_TOKEN` | `tk_xxx` | `docker exec ntfy ntfy token list jkrumm` on HomeLab, or from Doppler `homelab/prod` |
 
 **Monitoring**
 
