@@ -60,7 +60,8 @@ Key variables:
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Watchtower → Pushover via shoutrrr |
-| `ROLLHOOK_ADMIN_TOKEN/WEBHOOK_TOKEN` | RollHook API auth (add when deploying RollHook) |
+| `ROLLHOOK_ADMIN_TOKEN/WEBHOOK_TOKEN` | RollHook API auth — copy from homelab Doppler |
+| `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — copy from homelab Doppler |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `SIGNOZ_OTLP_ENDPOINT` | OTel collector config (`otel/config.yaml`) |

@@ -142,7 +142,7 @@ services:
   # Add one volume per app:  - /home/jkrumm/<app>:/home/jkrumm/<app>:ro
   # ---------------------------------------------------------------------------
   rollhook:
-    image: ghcr.io/jkrumm/rollhook:latest
+    image: registry.jkrumm.com/rollhook:latest
     container_name: rollhook
     restart: unless-stopped
     depends_on:

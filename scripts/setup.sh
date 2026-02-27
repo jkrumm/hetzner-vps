@@ -237,7 +237,23 @@ else
 fi
 
 # =============================================================================
-# 9. Create Docker external networks
+# 9. Private registry login (registry.jkrumm.com / Zot)
+# Stores credentials in ~/.docker/config.json — Docker Compose picks them up
+# automatically when pulling images from registry.jkrumm.com.
+# Requires: doppler setup (project: vps, config: prod) completed first.
+# =============================================================================
+if doppler secrets get ZOT_PASSWORD --plain --project vps --config prod &>/dev/null; then
+  log "Logging into private registry (registry.jkrumm.com)..."
+  su - "${DEPLOY_USER}" -c \
+    "doppler secrets get ZOT_PASSWORD --plain --project vps --config prod \
+     | docker login registry.jkrumm.com -u jkrumm --password-stdin"
+else
+  warn "ZOT_PASSWORD not in Doppler — skipping private registry login."
+  warn "Run manually after Doppler setup: doppler secrets get ZOT_PASSWORD --plain | docker login registry.jkrumm.com -u jkrumm --password-stdin"
+fi
+
+# =============================================================================
+# 10. Create Docker external networks
 # =============================================================================
 log "Creating Docker networks..."
 for network in proxy postgres-net valkey-net monitoring-net; do
@@ -250,7 +266,7 @@ for network in proxy postgres-net valkey-net monitoring-net; do
 done
 
 # =============================================================================
-# 10. Set up repo directory + acme.json
+# 11. Set up repo directory + acme.json
 # =============================================================================
 # Ensure repo dir exists and is owned by deploy user
 mkdir -p "${REPO_DIR}/traefik"
@@ -265,7 +281,7 @@ chmod 600 "${ACME_JSON}"
 chown "${DEPLOY_USER}:${DEPLOY_USER}" "${ACME_JSON}"
 
 # =============================================================================
-# 11. Install cron job for pg_dump backup
+# 12. Install cron job for pg_dump backup
 # =============================================================================
 log "Installing pg_backup cron job..."
 cp "${REPO_DIR}/cron/pg-backup" /etc/cron.d/pg-backup

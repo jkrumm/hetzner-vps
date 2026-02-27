@@ -260,12 +260,13 @@ Apps create their own users and databases on top of this superuser.
 | `BESZEL_AGENT_KEY` | `ssh-ed25519 AAAA...` | Beszel hub UI → Add System → address `<tailscale-ip>:45876` → copy SSH public key shown |
 | `SIGNOZ_OTLP_ENDPOINT` | `<tailscale-ip>:4317` | Tailscale IP of the homelab running SigNoz |
 
-**RollHook (add when deploying)**
+**RollHook**
 
 | Variable | Value | How to get |
 |-|-|-|
-| `ROLLHOOK_ADMIN_TOKEN` | `<generated>` | Generate: `openssl rand -hex 32` — never leave the server |
-| `ROLLHOOK_WEBHOOK_TOKEN` | `<generated>` | Generate: `openssl rand -hex 32` — put in GitHub repo secrets |
+| `ROLLHOOK_ADMIN_TOKEN` | `<generated>` | Copy from homelab Doppler — shared token |
+| `ROLLHOOK_WEBHOOK_TOKEN` | `<generated>` | Copy from homelab Doppler — shared token |
+| `ZOT_PASSWORD` | `<generated>` | Copy from homelab Doppler — used for `docker login registry.jkrumm.com` |
 
 ---
 
