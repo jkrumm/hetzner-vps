@@ -15,6 +15,7 @@ set -euo pipefail
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILENAME="postgres_${POSTGRES_DB}_${TIMESTAMP}.dump"
+BACKUP_PREFIX="backups/vps/postgres"
 RETENTION_DAYS=14
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
@@ -49,15 +50,15 @@ docker run --rm \
     --dbname="${POSTGRES_DB}" \
     --format=custom \
     --compress=9 \
-  | aws s3 cp - "s3://${AWS_S3_BUCKET}/backups/${BACKUP_FILENAME}" \
+  | aws s3 cp - "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
     --endpoint-url "${AWS_S3_ENDPOINT}" \
     --storage-class STANDARD
 
-log "Backup uploaded: s3://${AWS_S3_BUCKET}/backups/${BACKUP_FILENAME}"
+log "Backup uploaded: s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}"
 
 # Remove old backups (retention policy)
 log "Pruning backups older than ${RETENTION_DAYS} days..."
-aws s3 ls "s3://${AWS_S3_BUCKET}/backups/" \
+aws s3 ls "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/" \
     --endpoint-url "${AWS_S3_ENDPOINT}" \
   | awk '{print $4}' \
   | while read -r key; do
@@ -67,7 +68,7 @@ aws s3 ls "s3://${AWS_S3_BUCKET}/backups/" \
     cutoff=$(date -d "${RETENTION_DAYS} days ago" +%Y%m%d)
     if [[ "${filedate}" < "${cutoff}" ]]; then
       log "Deleting old backup: ${key}"
-      aws s3 rm "s3://${AWS_S3_BUCKET}/backups/${key}" \
+      aws s3 rm "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${key}" \
         --endpoint-url "${AWS_S3_ENDPOINT}"
     fi
   done

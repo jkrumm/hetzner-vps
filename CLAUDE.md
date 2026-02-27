@@ -58,11 +58,32 @@ Key variables:
 | `CF_DNS_API_TOKEN` | Traefik → lego → Cloudflare DNS-01 challenge |
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared tunnel auth (from Cloudflare dashboard) |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
-| `AWS_*` + `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Watchtower → Pushover via shoutrrr |
 | `ROLLHOOK_ADMIN_TOKEN/WEBHOOK_TOKEN` | RollHook API auth (add when deploying RollHook) |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `SIGNOZ_OTLP_ENDPOINT` | OTel collector config (`otel/config.yaml`) |
+
+---
+
+## Object Storage — Bucket Layout
+
+Hetzner Object Storage, bucket `jkrumm` (`fsn1`). All paths are prefixed to avoid collisions across sources:
+
+```
+jkrumm/
+└── backups/
+    ├── vps/
+    │   └── postgres/       ← backup-pg.sh (daily cron, 14-day retention)
+    └── homelab/
+        ├── clickhouse/     ← future: ClickHouse backups
+        ├── postgres/       ← future: HomeLab Postgres (if any)
+        ├── uptime-kuma/    ← future: Uptime Kuma data
+        ├── images/         ← future: container images / ISOs
+        └── documents/      ← future: personal documents / files
+```
+
+HomeLab backup scripts should write to `backups/homelab/<service>/` using the same `AWS_*` credentials (stored in HomeLab secrets manager, not Doppler `vps`).
 
 ---
 
