@@ -4,4 +4,4 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 3 * * * jkrumm doppler run --project hetzner-vps --config prd -- /home/jkrumm/hetzner-vps/scripts/backup-pg.sh >> /var/log/pg-backup.log 2>&1
+0 3 * * * jkrumm doppler run --project vps --config prod -- /home/jkrumm/hetzner-vps/scripts/backup-pg.sh >> /var/log/pg-backup.log 2>&1

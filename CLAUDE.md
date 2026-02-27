@@ -1,6 +1,8 @@
 # hetzner-vps
 
-Infrastructure-as-code for a Hetzner CX43 VPS (8 vCPU · 16 GB · 160 GB SSD · Ubuntu 24.04). Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking, infra (databases), and monitoring.
+Infrastructure-as-code for a Hetzner CX33 VPS (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking, infra (databases), and monitoring.
+
+> **Servers:** `vps` = CX33 (this repo, Doppler project `vps`). `sds` = old CX43 (8 vCPU · 16 GB · 160 GB SSD, Doppler project `hetzner-vps`).
 
 ---
 
@@ -40,7 +42,7 @@ make dev-down
 
 ## Secrets
 
-Doppler project `hetzner-vps`, config `prd`. Variable names in `.env.example`.
+Doppler project `vps`, config `prod`. Variable names in `.env.example`.
 
 **Never write actual values in this repo** — use `<placeholder>` format in docs.
 

@@ -1,6 +1,6 @@
 # hetzner-vps
 
-Production Docker Compose stack for a Hetzner CX43 (8 vCPU · 16 GB · 160 GB SSD · Ubuntu 24.04). Single-node, no orchestration. Cloudflare Tunnel handles all public ingress — zero inbound ports on the server. Three compose stacks by concern: networking, infra, monitoring.
+Production Docker Compose stack for a Hetzner CX33 (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04). Single-node, no orchestration. Cloudflare Tunnel handles all public ingress — zero inbound ports on the server. Three compose stacks by concern: networking, infra, monitoring.
 
 ---
 
@@ -117,7 +117,7 @@ Docker API access — no direct docker.sock mounts:
 
 **`container_name: redis` for Valkey.** Every app references `redis:6379` without modification.
 
-**Doppler for secrets.** All sensitive values in Doppler project `hetzner-vps`, config `prd`. Zero secrets in the repo. Variable names documented in `.env.example`. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
+**Doppler for secrets.** All sensitive values in Doppler project `vps`, config `prod`. Zero secrets in the repo. Variable names documented in `.env.example`. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
 
 **No Terraform.** Hetzner Firewall managed via hcloud CLI script (`scripts/firewall.sh`). Single-server setup doesn't justify state management overhead.
 
@@ -148,7 +148,7 @@ sudo systemctl restart sshd
 # ⚠ Verify Tailscale SSH works before closing this session
 
 # Configure Doppler
-doppler login && doppler setup   # project: hetzner-vps, config: prd
+doppler login && doppler setup   # project: vps, config: prod
 
 # Apply cloud firewall, then assign to server in hcloud dashboard
 cd ~/hetzner-vps && make firewall
@@ -165,7 +165,7 @@ make up
 
 ## Secrets
 
-Doppler project `hetzner-vps`, config `prd`. Full list in `.env.example`.
+Doppler project `vps`, config `prod`. Full list in `.env.example`.
 
 | Variable | Description |
 |-|-|
