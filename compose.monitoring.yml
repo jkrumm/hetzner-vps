@@ -12,6 +12,8 @@ networks:
   socket-proxy-monitoring-net:
     driver: bridge
     internal: true
+  watchtower-egress:
+    driver: bridge  # Internet access for ntfy.jkrumm.com notifications
 
 services:
 
@@ -42,7 +44,7 @@ services:
       options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
-  # Watchtower — auto-updates containers and sends Pushover notifications.
+  # Watchtower — auto-updates containers and sends ntfy notifications.
   # Connects to Docker via socket proxy (TCP). Postgres and Valkey excluded.
   # Notifications only at warn level (failures, not every successful update).
   # ---------------------------------------------------------------------------
@@ -55,19 +57,20 @@ services:
     security_opt:
       - no-new-privileges:true
     mem_limit: 128m
+    networks:
+      - socket-proxy-watchtower-net
+      - watchtower-egress
     environment:
       # Connect to Docker via proxy (no direct docker.sock mount needed)
       DOCKER_HOST: tcp://socket-proxy-watchtower:2375
       DOCKER_API_VERSION: "1.44"
-      # Pushover via shoutrrr — token and user key from Doppler
-      WATCHTOWER_NOTIFICATION_URL: "pushover://shoutrrr:${WATCHTOWER_PUSHOVER_TOKEN}@${WATCHTOWER_PUSHOVER_USER_KEY}"
+      # ntfy via shoutrrr — token from Doppler
+      WATCHTOWER_NOTIFICATION_URL: "ntfy://:${NTFY_TOKEN}@ntfy.jkrumm.com/vps-watchtower"
       WATCHTOWER_NOTIFICATIONS_LEVEL: warn
       # Remove old images after successful update
       WATCHTOWER_CLEANUP: "true"
       # Run daily at 04:00 (6-field cron: seconds minutes hours day month weekday)
       WATCHTOWER_SCHEDULE: "0 0 4 * * *"
-    networks:
-      - socket-proxy-watchtower-net
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
