@@ -2,16 +2,22 @@
 # =============================================================================
 # Hetzner VPS — Initial Server Provisioning & Hardening
 # Run as root on a fresh Ubuntu 24.04 server.
-# Idempotent: safe to re-run. Uses /etc/setup-complete markers.
+# Idempotent: safe to re-run.
+# Supports IPv6-only hosts (CX33 without IPv4).
 # =============================================================================
 set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 
 DEPLOY_USER="jkrumm"
 GITHUB_USERNAME="jkrumm"
 REPO_DIR="/home/${DEPLOY_USER}/hetzner-vps"
 
-log() { echo "[$(date +%H:%M:%S)] $*"; }
+log()  { echo "[$(date +%H:%M:%S)] $*"; }
 skip() { echo "[$(date +%H:%M:%S)] SKIP: $*"; }
+warn() { echo "[$(date +%H:%M:%S)] WARN: $*"; }
 
 # Must run as root
 [[ $EUID -ne 0 ]] && echo "Run as root." && exit 1
@@ -33,11 +39,20 @@ else
   usermod -aG sudo "${DEPLOY_USER}"
 fi
 
-# Add SSH keys from GitHub
-log "Fetching SSH keys from GitHub..."
+# Add SSH keys — try GitHub first, fall back to root's authorized_keys
+log "Fetching SSH keys..."
 mkdir -p "/home/${DEPLOY_USER}/.ssh"
 chmod 700 "/home/${DEPLOY_USER}/.ssh"
-curl -fsSL "https://github.com/${GITHUB_USERNAME}.keys" >> "/home/${DEPLOY_USER}/.ssh/authorized_keys"
+touch "/home/${DEPLOY_USER}/.ssh/authorized_keys"
+if curl -fsSL --max-time 10 "https://github.com/${GITHUB_USERNAME}.keys" \
+    >> "/home/${DEPLOY_USER}/.ssh/authorized_keys" 2>/dev/null; then
+  log "SSH keys fetched from GitHub"
+elif [[ -s /root/.ssh/authorized_keys ]]; then
+  warn "GitHub unreachable (IPv6-only host?) — copying root authorized_keys as fallback"
+  cat /root/.ssh/authorized_keys >> "/home/${DEPLOY_USER}/.ssh/authorized_keys"
+else
+  warn "Could not fetch SSH keys from GitHub and no root keys found. Add keys manually to /home/${DEPLOY_USER}/.ssh/authorized_keys"
+fi
 sort -u "/home/${DEPLOY_USER}/.ssh/authorized_keys" -o "/home/${DEPLOY_USER}/.ssh/authorized_keys"
 chmod 600 "/home/${DEPLOY_USER}/.ssh/authorized_keys"
 chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "/home/${DEPLOY_USER}/.ssh"
@@ -103,9 +118,9 @@ apt-get install -y -qq ufw
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 80/tcp comment "HTTP (Traefik)"
-ufw allow 443/tcp comment "HTTPS (Traefik)"
-# Tailscale interface: allow everything (SSH, monitoring agents, etc.)
+# No inbound 80/443 — Traefik has no host ports; all public traffic enters via
+# Cloudflare Tunnel (outbound-only). Hetzner Firewall enforces zero inbound too.
+# Tailscale interface: allow everything (SSH, monitoring agents, OTel)
 ufw allow in on tailscale0 comment "Tailscale"
 ufw --force enable
 log "UFW enabled. SSH only accessible via Tailscale."
@@ -120,7 +135,7 @@ Unattended-Upgrade::Allowed-Origins {
     "${distro_id}:${distro_codename}-security";
 };
 
-// Never auto-upgrade Docker or container tooling — WUD handles container updates.
+// Never auto-upgrade Docker or container tooling — Watchtower handles container updates.
 Unattended-Upgrade::Package-Blacklist {
     "docker-ce";
     "docker-ce-cli";
@@ -168,12 +183,16 @@ fi
 # 8. Install tooling
 # =============================================================================
 
-# AWS CLI (for S3 backup uploads)
+# AWS CLI v2 (for S3 backup uploads) — official installer from awscli.amazonaws.com
 if command -v aws &>/dev/null; then
-  skip "AWS CLI already installed"
+  skip "AWS CLI already installed ($(aws --version 2>&1 | cut -d' ' -f1))"
 else
-  log "Installing AWS CLI..."
-  apt-get install -y -qq awscli
+  log "Installing AWS CLI v2..."
+  apt-get install -y -qq unzip
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+  rm -rf /tmp/aws /tmp/awscliv2.zip
 fi
 
 # Tailscale
@@ -184,25 +203,37 @@ else
   curl -fsSL https://tailscale.com/install.sh | sh
 fi
 
-# Doppler CLI
+# Doppler CLI — installer downloads from packages.doppler.com (IPv4 only on some CDNs)
 if command -v doppler &>/dev/null; then
-  skip "Doppler already installed"
+  skip "Doppler already installed ($(doppler --version 2>&1))"
 else
   log "Installing Doppler CLI..."
   apt-get install -y -qq apt-transport-https
-  curl -sLf "https://cli.cloudflare.com/install.sh" | sh 2>/dev/null || true
-  # Official Doppler install
-  curl -Ls https://cli.doppler.com/install.sh | sh
+  if curl -Ls --max-time 15 https://cli.doppler.com/install.sh | sh; then
+    log "Doppler CLI installed"
+  else
+    warn "Doppler CLI install failed (IPv4-only CDN unreachable from IPv6 host)."
+    warn "Install via apt repo manually, or copy binary from another host:"
+    warn "  scp <other-host>:/usr/bin/doppler /usr/local/bin/doppler"
+  fi
 fi
 
-# hcloud CLI
+# hcloud CLI — downloads from GitHub; may be unavailable on IPv6-only hosts
 if command -v hcloud &>/dev/null; then
   skip "hcloud CLI already installed"
 else
   log "Installing hcloud CLI..."
-  HCLOUD_VERSION=$(curl -s https://api.github.com/repos/hetznercloud/cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-  curl -fsSL "https://github.com/hetznercloud/cli/releases/download/${HCLOUD_VERSION}/hcloud-linux-amd64.tar.gz" \
-    | tar -xz -C /usr/local/bin hcloud
+  HCLOUD_VERSION=$(curl -s --max-time 10 https://api.github.com/repos/hetznercloud/cli/releases/latest 2>/dev/null \
+    | grep '"tag_name"' | cut -d'"' -f4 || true)
+  if [[ -n "${HCLOUD_VERSION}" ]]; then
+    curl -fsSL "https://github.com/hetznercloud/cli/releases/download/${HCLOUD_VERSION}/hcloud-linux-amd64.tar.gz" \
+      | tar -xz -C /usr/local/bin hcloud
+    log "hcloud CLI installed: ${HCLOUD_VERSION}"
+  else
+    warn "Could not install hcloud CLI (GitHub unreachable on IPv6-only host)."
+    warn "Install manually from: https://github.com/hetznercloud/cli/releases/latest"
+    warn "Or run from your local machine: make firewall (via SSH)"
+  fi
 fi
 
 # =============================================================================
@@ -221,19 +252,17 @@ done
 # =============================================================================
 # 10. Set up repo directory + acme.json
 # =============================================================================
-if [[ ! -d "${REPO_DIR}" ]]; then
-  log "Creating repo directory at ${REPO_DIR}..."
-  mkdir -p "${REPO_DIR}/traefik"
-  chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${REPO_DIR}"
-fi
+# Ensure repo dir exists and is owned by deploy user
+mkdir -p "${REPO_DIR}/traefik"
+chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${REPO_DIR}"
 
 ACME_JSON="${REPO_DIR}/traefik/acme.json"
 if [[ ! -f "${ACME_JSON}" ]]; then
   log "Creating traefik/acme.json..."
   touch "${ACME_JSON}"
-  chmod 600 "${ACME_JSON}"
-  chown "${DEPLOY_USER}:${DEPLOY_USER}" "${ACME_JSON}"
 fi
+chmod 600 "${ACME_JSON}"
+chown "${DEPLOY_USER}:${DEPLOY_USER}" "${ACME_JSON}"
 
 # =============================================================================
 # 11. Install cron job for pg_dump backup
@@ -250,14 +279,17 @@ log ""
 log "============================================================"
 log " Setup complete! Next steps:"
 log "============================================================"
-log " 1. Connect Tailscale:    sudo tailscale up"
-log " 2. Update SSH config:    Edit /etc/ssh/sshd_config.d/99-hardening.conf"
-log "                          Uncomment ListenAddress <tailscale-ip>"
-log "                          Run: systemctl restart sshd"
+log " 1. Connect Tailscale:    tailscale up  (already done if you see a TS IP)"
+log " 2. Lock down SSH:        Edit /etc/ssh/sshd_config.d/99-hardening.conf"
+log "                          Uncomment: ListenAddress <tailscale-ip>"
+log "                          Verify Tailscale SSH works, then: systemctl restart sshd"
 log " 3. Login to Doppler:     su - ${DEPLOY_USER}"
 log "                          doppler login && doppler setup"
-log " 4. Apply firewall:       cd ${REPO_DIR} && make firewall"
-log " 5. Start infra:          make up"
-log " 6. Start monitoring:     make monitoring-up"
-log " 7. Register CrowdSec:    docker exec crowdsec cscli capi register"
+log "                          (project: vps, config: prod)"
+log " 4. Cloudflare Tunnel:    Create tunnel in Cloudflare dashboard → Zero Trust → Tunnels"
+log "                          Copy token → Doppler as CLOUDFLARE_TUNNEL_TOKEN"
+log " 5. Apply firewall:       cd ${REPO_DIR} && make firewall"
+log "                          Then assign firewall to server in hcloud dashboard"
+log " 6. Start all stacks:     make up"
+log "                          (networking → infra → monitoring in order)"
 log "============================================================"
