@@ -135,6 +135,7 @@ compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-pro
 compose.infra.yml             Databases (Postgres, Valkey)
 compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey with ports exposed, no Doppler)
+apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
 traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only

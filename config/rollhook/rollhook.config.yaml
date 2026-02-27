@@ -1,4 +1,9 @@
-apps: []
+apps:
+  - name: rollhook-marketing
+    compose_path: /home/jkrumm/hetzner-vps/apps/rollhook-marketing/compose.yml
+    steps:
+      - service: rollhook-marketing
+
 # Add one entry per app. The compose_path must be accessible inside the
 # rollhook container (add a matching volume mount in compose.networking.yml).
 #

@@ -1,0 +1,53 @@
+---
+# rollhook-marketing — static Astro marketing site served via nginx.
+# Managed by RollHook for zero-downtime deployments via rolling container swap.
+#
+# RollHook constraints (do not change):
+#   - No container_name  — prevents scaling to 2 instances during rollout
+#   - No ports           — Traefik routes via Docker DNS; ports block scaling
+#   - healthcheck required — rollout waits for healthy before removing old container
+#   - IMAGE_TAG env var  — passed by RollHook as the full image URI to deploy
+
+networks:
+  proxy:
+    external: true
+
+services:
+  rollhook-marketing:
+    image: ${IMAGE_TAG:-registry.jkrumm.com/private/rollhook-marketing:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 5s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      # Main domain — rollhook.com
+      - "traefik.http.routers.rollhook-marketing.rule=Host(`rollhook.com`)"
+      - "traefik.http.routers.rollhook-marketing.entrypoints=websecure"
+      - "traefik.http.routers.rollhook-marketing.tls.certresolver=letsencrypt"
+      # Request cert covering both apex and www in a single certificate
+      - "traefik.http.routers.rollhook-marketing.tls.domains[0].main=rollhook.com"
+      - "traefik.http.routers.rollhook-marketing.tls.domains[0].sans=www.rollhook.com"
+      - "traefik.http.services.rollhook-marketing.loadbalancer.server.port=80"
+      - "traefik.http.routers.rollhook-marketing.middlewares=rate-limit@file,security-headers@file"
+      # Active health check — Traefik stops routing to draining instance immediately
+      - "traefik.http.services.rollhook-marketing.loadbalancer.healthcheck.path=/"
+      - "traefik.http.services.rollhook-marketing.loadbalancer.healthcheck.interval=5s"
+      # www → canonical redirect (301 permanent)
+      - "traefik.http.routers.rollhook-marketing-www.rule=Host(`www.rollhook.com`)"
+      - "traefik.http.routers.rollhook-marketing-www.entrypoints=websecure"
+      - "traefik.http.routers.rollhook-marketing-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.rollhook-marketing-www.middlewares=www-to-rollhook@docker"
+      - "traefik.http.middlewares.www-to-rollhook.redirectregex.regex=^https://www\\.rollhook\\.com/(.*)"
+      - "traefik.http.middlewares.www-to-rollhook.redirectregex.replacement=https://rollhook.com/$${1}"
+      - "traefik.http.middlewares.www-to-rollhook.redirectregex.permanent=true"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
