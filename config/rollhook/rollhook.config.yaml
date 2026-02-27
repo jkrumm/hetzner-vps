@@ -1,0 +1,9 @@
+apps: []
+# Add one entry per app. The compose_path must be accessible inside the
+# rollhook container (add a matching volume mount in compose.networking.yml).
+#
+# Example:
+#   - name: myapp
+#     compose_path: /home/jkrumm/myapp/compose.yml
+#     steps:
+#       - service: myapp

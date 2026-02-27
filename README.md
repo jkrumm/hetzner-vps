@@ -81,6 +81,7 @@ Homelab connectivity: Tailscale
 
 Docker API access — no direct docker.sock mounts:
   socket-proxy             (read-only)  → Traefik
+  socket-proxy-rollhook    (POST=1)     → RollHook
   socket-proxy-watchtower  (POST=1)     → Watchtower
   socket-proxy-monitoring  (read-only)  → Dozzle + Beszel
 ```
@@ -94,6 +95,8 @@ Docker API access — no direct docker.sock mounts:
 | cloudflared | cloudflare/cloudflared | Public ingress via Cloudflare Tunnel | auto |
 | socket-proxy | tecnativa/docker-socket-proxy | Read-only Docker API for Traefik | auto |
 | traefik | traefik:v3 | Reverse proxy, TLS termination | auto |
+| socket-proxy-rollhook | tecnativa/docker-socket-proxy | Write Docker API for RollHook | auto |
+| rollhook | ghcr.io/jkrumm/rollhook | Zero-downtime rolling deployments via webhook | auto |
 | postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
 | valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
 | otel-collector | otel/opentelemetry-collector-contrib | OTLP pipeline → SigNoz | auto |
@@ -109,7 +112,7 @@ Docker API access — no direct docker.sock mounts:
 
 **Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Hetzner Firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.<DOMAIN>`) — required so cloudflared can verify the TLS handshake with Traefik internally.
 
-**Three socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. Watchtower gets a dedicated proxy with POST=1 on an isolated network — write access isolated from the others.
+**Four socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. RollHook and Watchtower each get a dedicated proxy with POST=1 on isolated networks — write access never shared between them.
 
 **SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only. Port 22 is absent from both Hetzner Firewall and UFW. Zero SSH attack surface from the public internet.
 

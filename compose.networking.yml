@@ -1,5 +1,5 @@
 ---
-# Networking/proxy stack — cloudflared, Traefik, socket-proxy
+# Networking/proxy stack — cloudflared, Traefik, socket-proxy, RollHook
 # Deploy: doppler run -- docker compose -f compose.networking.yml up -d
 
 networks:
@@ -8,6 +8,12 @@ networks:
   socket-proxy-net:
     driver: bridge
     internal: true
+  socket-proxy-rollhook-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  rollhook-data:
 
 services:
 
@@ -69,6 +75,8 @@ services:
     image: traefik:v3
     container_name: traefik
     restart: unless-stopped
+    depends_on:
+      - socket-proxy
     security_opt:
       - no-new-privileges:true
     ports:
@@ -97,6 +105,77 @@ services:
       # Request wildcard cert via DNS-01 — Docker Compose substitutes ${DOMAIN} in labels ✓
       - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
       - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # Socket proxy for RollHook — write access (POST=1) for rolling deployments.
+  # Isolated on socket-proxy-rollhook-net, never shared with Traefik's proxy.
+  # ---------------------------------------------------------------------------
+  socket-proxy-rollhook:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy-rollhook
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: 1
+      SERVICES: 1
+      IMAGES: 1
+      INFO: 1
+      POST: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy-rollhook-net
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # RollHook — zero-downtime rolling deployments via GitHub Actions webhooks.
+  # Receives POST /deploy/:app, scales up new container, waits for healthcheck,
+  # then removes the old one. Routed publicly via Cloudflare → Traefik.
+  #
+  # App compose files must be mounted here for docker-rollout to read them.
+  # Add one volume per app:  - /home/jkrumm/<app>:/home/jkrumm/<app>:ro
+  # ---------------------------------------------------------------------------
+  rollhook:
+    image: ghcr.io/jkrumm/rollhook:latest
+    container_name: rollhook
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy-rollhook
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      ADMIN_TOKEN: ${ROLLHOOK_ADMIN_TOKEN}
+      WEBHOOK_TOKEN: ${ROLLHOOK_WEBHOOK_TOKEN}
+      ROLLHOOK_CONFIG_PATH: /app/rollhook.config.yaml
+      PORT: "7700"
+      DOCKER_HOST: tcp://socket-proxy-rollhook:2375
+    volumes:
+      - ./config/rollhook/rollhook.config.yaml:/app/rollhook.config.yaml:ro
+      - rollhook-data:/app/data
+      # docker compose plugin — required for rolling deployments
+      - /usr/lib/docker/cli-plugins/docker-compose:/usr/local/lib/docker/cli-plugins/docker-compose:ro
+    healthcheck:
+      test: [CMD, bun, -e, "fetch('http://localhost:7700/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rollhook.rule=Host(`rollhook-vps.${DOMAIN}`)"
+      - "traefik.http.routers.rollhook.entrypoints=websecure"
+      - "traefik.http.routers.rollhook.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rollhook.loadbalancer.server.port=7700"
+      - "traefik.http.routers.rollhook.middlewares=rate-limit@file,security-headers@file"
+    networks:
+      - proxy
+      - socket-proxy-rollhook-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

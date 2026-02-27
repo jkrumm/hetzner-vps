@@ -1,6 +1,6 @@
 # hetzner-vps
 
-Infrastructure-as-code for a Hetzner CX33 VPS (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking, infra (databases), and monitoring.
+Infrastructure-as-code for a Hetzner CX33 VPS (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking (incl. RollHook), infra (databases), and monitoring.
 
 ---
 
@@ -104,6 +104,7 @@ Internal networks (created by Docker Compose, not external):
 | Network | Purpose |
 |-|-|
 | `socket-proxy-net` | Traefik → socket-proxy (read-only, POST=0) |
+| `socket-proxy-rollhook-net` | RollHook → socket-proxy-rollhook (POST=1, write access) |
 | `socket-proxy-watchtower-net` | Watchtower → socket-proxy-watchtower (POST=1, write access) |
 | `socket-proxy-monitoring-net` | Dozzle + Beszel → socket-proxy-monitoring (read-only, LOGS+STATS) |
 
@@ -125,10 +126,11 @@ Internal networks (created by Docker Compose, not external):
 ## File Map
 
 ```
-compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy)
+compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey)
 compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey with ports exposed, no Doppler)
+config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
 traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik

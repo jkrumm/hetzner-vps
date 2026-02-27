@@ -50,6 +50,8 @@ services:
     image: containrrr/watchtower:latest
     container_name: watchtower
     restart: unless-stopped
+    depends_on:
+      - socket-proxy-watchtower
     security_opt:
       - no-new-privileges:true
     mem_limit: 128m
@@ -132,6 +134,8 @@ services:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent
     restart: unless-stopped
+    depends_on:
+      - socket-proxy-monitoring
     security_opt:
       - no-new-privileges:true
     mem_limit: 64m
@@ -156,6 +160,8 @@ services:
     image: amir20/dozzle:latest
     container_name: dozzle
     restart: unless-stopped
+    depends_on:
+      - socket-proxy-monitoring
     security_opt:
       - no-new-privileges:true
     mem_limit: 64m
