@@ -161,7 +161,7 @@ services:
       # Docker registry credentials — required for pulling from private registry
       - /home/jkrumm/.docker/config.json:/root/.docker/config.json:ro
       # Mount app compose files — one volume per app managed by RollHook
-      - /home/jkrumm/hetzner-vps/apps/rollhook-marketing:/home/jkrumm/hetzner-vps/apps/rollhook-marketing:ro
+      - /home/jkrumm/hetzner-vps/apps/rollhook-marketing:/home/jkrumm/hetzner-vps/apps/rollhook-marketing
 
     healthcheck:
       test: [CMD, bun, -e, "fetch('http://localhost:7700/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
