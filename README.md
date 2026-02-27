@@ -23,6 +23,11 @@ make shell-postgres  # psql shell
 # Ops
 make firewall        # reapply Hetzner Cloud Firewall rules
 
+# Cloudflare tunnel + DNS (always via doppler — token never exposed)
+make cf-tunnel-get                     # show current tunnel ingress config
+make cf-tunnel-set                     # set *.DOMAIN → traefik:443 catch-all
+make cf-dns-add subdomain=myapp        # add proxied CNAME for new app subdomain
+
 # Traefik cert debug
 docker logs traefik 2>&1 | grep -i acme
 
@@ -204,12 +209,23 @@ make up
 
 Verify: `make ps` — all containers should be running within ~30 seconds.
 
-### 9. Cloudflare public hostnames
+### 9. Cloudflare tunnel ingress + DNS
 
-In Cloudflare dashboard → Tunnel → **Public Hostnames**:
-- Add `*.<DOMAIN>` → `https://traefik:443`, TLS verify: **off**
+Set the wildcard ingress rule (routes all VPS-bound subdomains to Traefik):
+```bash
+cd ~/hetzner-vps && make cf-tunnel-set
+```
+
+Then for each public app subdomain, add a DNS record pointing to this tunnel:
+```bash
+make cf-dns-add subdomain=myapp
+```
+
+Both commands run on the server via `doppler run --` — the API token stays in Doppler, never exposed to shell history or Claude Code.
 
 Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 min — check `docker logs traefik | grep -i acme`).
+
+> **Wildcard ingress scope:** The `*.DOMAIN` rule only matches requests already DNS-routed to the VPS tunnel. Other subdomains pointing to different Cloudflare tunnels (HomeLab, etc.) are completely unaffected — each tunnel evaluates its own ingress rules independently.
 
 ---
 
@@ -223,8 +239,16 @@ Doppler project `vps`, config `prod`. No `.env` file — Doppler is the only sec
 |-|-|-|
 | `DOMAIN` | `example.com` | Your apex domain — wildcard cert covers `*.DOMAIN` |
 | `ACME_EMAIL` | `you@example.com` | Email for Let's Encrypt notifications |
-| `CF_DNS_API_TOKEN` | `<token>` | Cloudflare → My Profile → API Tokens → Create Token → "Edit zone DNS" template → scope to your zone |
+| `CF_API_TOKEN` | `<token>` | Cloudflare → My Profile → API Tokens → Create Token → needs **DNS:Edit** + **Cloudflare Tunnel:Edit** for all zones. Traefik receives it as `CF_DNS_API_TOKEN` (compose mapping — lego requires that name) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | `<token>` | Cloudflare → Zero Trust → Networks → Tunnels → Create tunnel → copy token |
+
+**Cloudflare API context (used by `scripts/cf-tunnel-ingress.sh` and `/cloudflare` skill)**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `CF_ACCOUNT_ID` | `<id>` | Cloudflare dashboard → any zone → Overview → right sidebar (Account ID) |
+| `CF_ZONE_ID` | `<id>` | Cloudflare dashboard → your zone → Overview → right sidebar (Zone ID) |
+| `CF_TUNNEL_ID` | `<uuid>` | Cloudflare → Zero Trust → Networks → Tunnels → click tunnel → copy ID from URL |
 
 **PostgreSQL**
 
@@ -367,12 +391,3 @@ All dashboards are Tailscale-only — no public routes.
 
 Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` middleware (IP allowlist: `100.64.0.0/10`).
 
----
-
-## TODOs
-
-- **Private registry auth:** When pulling images from a private registry, add idempotent login to `setup.sh`:
-  ```bash
-  doppler secrets get ZOT_PASSWORD --plain | docker login <registry-domain> -u <username> --password-stdin
-  ```
-  Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically.

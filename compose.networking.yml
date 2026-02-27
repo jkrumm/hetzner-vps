@@ -84,7 +84,7 @@ services:
       # Public apps are still routed via cloudflared (no internet exposure here).
       - "${VPS_TAILSCALE_IP}:443:443"
     environment:
-      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      CF_DNS_API_TOKEN: ${CF_API_TOKEN}  # lego expects CF_DNS_API_TOKEN for Cloudflare DNS-01
       # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
     volumes:

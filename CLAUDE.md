@@ -22,6 +22,11 @@ make shell-postgres      # psql shell
 make backup              # manual pg_dump → S3
 make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
 
+# Cloudflare tunnel + DNS (always via doppler — token never exposed)
+make cf-tunnel-get                    # show current tunnel ingress config
+make cf-tunnel-set                    # set *.DOMAIN → traefik:443 catch-all
+make cf-dns-add subdomain=myapp       # add proxied CNAME for new app subdomain
+
 # Local dev
 make dev-up              # Postgres + Valkey with ports exposed, no Doppler
 make dev-down
@@ -40,6 +45,7 @@ git push && ssh vps "cd ~/hetzner-vps && git pull"
 |-|-|-|
 | `/audit` | main | 7-phase health audit: resources, containers, tunnel, Tailscale, errors, backup, manual upgrades (Postgres + Valkey) |
 | `/docs` | main | Documentation maintenance — sync compose files against README/CLAUDE.md, verify Secrets section coverage |
+| `/cloudflare` | main | Cloudflare API operations — DNS records, tunnel ingress config, multi-domain support |
 
 ---
 
@@ -55,8 +61,11 @@ Key variables:
 |-|-|
 | `DOMAIN` | Traefik labels (wildcard cert: `*.DOMAIN`) |
 | `ACME_EMAIL` | `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on Traefik |
-| `CF_DNS_API_TOKEN` | Traefik → lego → Cloudflare DNS-01 challenge |
+| `CF_API_TOKEN` | Cloudflare API token — needs DNS:Edit + Tunnel:Edit. Passed to Traefik as `CF_DNS_API_TOKEN` (lego expects that name) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared tunnel auth (from Cloudflare dashboard) |
+| `CF_ACCOUNT_ID` | Cloudflare account ID — used by `scripts/cf-tunnel-ingress.sh` and `/cloudflare` skill |
+| `CF_ZONE_ID` | Zone ID for `DOMAIN` — used by `scripts/cf-tunnel-ingress.sh` |
+| `CF_TUNNEL_ID` | VPS tunnel UUID — used by `scripts/cf-tunnel-ingress.sh` |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Watchtower → Pushover via shoutrrr |
@@ -140,6 +149,7 @@ scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docke
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           hcloud CLI firewall rules — IaC for Hetzner Cloud Firewall
+scripts/cf-tunnel-ingress.sh  Cloudflare API: get/set tunnel ingress, add DNS records (always via doppler run)
 cron/pg-backup                Dropped into /etc/cron.d/ — runs backup at 03:00 daily
 README.md → Secrets           All Doppler variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
