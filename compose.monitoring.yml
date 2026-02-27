@@ -148,7 +148,7 @@ services:
     mem_limit: 64m
     command: agent
     environment:
-      DOZZLE_HOSTNAME: hetzner-vps
+      DOZZLE_HOSTNAME: vps
       DOCKER_HOST: tcp://socket-proxy-monitoring:2375
     networks:
       - monitoring-net
