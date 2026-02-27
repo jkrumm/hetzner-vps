@@ -10,7 +10,7 @@
 
 **What this skill does:**
 1. Diffs compose files against README.md and CLAUDE.md service tables
-2. Verifies `.env.example` covers every `${VAR}` referenced in compose files and scripts
+2. Verifies README.md Secrets section covers every `${VAR}` referenced in compose files and scripts
 3. Checks Makefile targets match what CLAUDE.md Quick Reference documents
 4. Flags internal socket-proxy networks that are missing from CLAUDE.md Networks section
 5. Detects services with `com.centurylinklabs.watchtower.enable=false` not documented in upgrade procedures
@@ -32,9 +32,9 @@
 - [ ] No removed services still referenced in README or CLAUDE.md
 
 ### Secret Coverage
-- [ ] Every `${VAR}` in compose files appears in `.env.example`
-- [ ] Every `${VAR}` in `scripts/` appears in `.env.example`
-- [ ] No variables in `.env.example` that are no longer used in any compose file or script
+- [ ] Every `${VAR}` in compose files appears in README.md Secrets section
+- [ ] Every `${VAR}` in `scripts/` appears in README.md Secrets section
+- [ ] No variables documented in README.md Secrets that are no longer used in any compose file or script
 
 ### Network Documentation
 - [ ] All external networks in compose files match what `setup.sh` creates
@@ -62,7 +62,7 @@ If a new excluded container appears, flag it and prompt to add upgrade procedure
 
 After updates:
 - [ ] README stack table image names match compose files
-- [ ] `.env.example` covers all vars (run: `grep -h '\${' compose*.yml scripts/*.sh | grep -oE '\$\{[A-Z_]+\}' | sort -u`)
+- [ ] README.md Secrets section covers all vars (run: `grep -h '\${' compose*.yml scripts/*.sh | grep -oE '\$\{[A-Z_]+\}' | sort -u`)
 - [ ] No stale service names (CrowdSec, WUD, etc.) remain anywhere
 - [ ] Middleware names consistent across CLAUDE.md, README.md, and compose examples
 - [ ] CLAUDE.md Quick Reference matches Makefile

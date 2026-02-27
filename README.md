@@ -61,7 +61,7 @@ Cloudflare edge (Tunnel — outbound-only from VPS, zero inbound ports)
 cloudflared (compose.networking.yml)
   │
 Traefik v3
-  ├─ Wildcard TLS via Cloudflare DNS-01 ACME (*.yourdomain.com)
+  ├─ Wildcard TLS via Cloudflare DNS-01 ACME (*.<DOMAIN>)
   ├─ Middleware chain: rate-limit → security-headers
   ├─ Traefik dashboard (tailscale-only IP allowlist)
   ├─ app-1  (network: proxy)
@@ -107,7 +107,7 @@ Docker API access — no direct docker.sock mounts:
 
 ## Design Decisions
 
-**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Hetzner Firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.yourdomain.com`) — required so cloudflared can verify the TLS handshake with Traefik internally.
+**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Hetzner Firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.<DOMAIN>`) — required so cloudflared can verify the TLS handshake with Traefik internally.
 
 **Three socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. Watchtower gets a dedicated proxy with POST=1 on an isolated network — write access isolated from the others.
 
@@ -117,7 +117,7 @@ Docker API access — no direct docker.sock mounts:
 
 **`container_name: redis` for Valkey.** Every app references `redis:6379` without modification.
 
-**Doppler for secrets.** All sensitive values in Doppler project `vps`, config `prod`. Zero secrets in the repo. Variable names documented in `.env.example`. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
+**Doppler for secrets.** All sensitive values in Doppler project `vps`, config `prod`. Zero secrets in the repo — no `.env` or `.env.example`. Variable names and setup instructions documented in the Secrets section below. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
 
 **No Terraform.** Hetzner Firewall managed via hcloud CLI script (`scripts/firewall.sh`). Single-server setup doesn't justify state management overhead.
 
@@ -125,61 +125,144 @@ Docker API access — no direct docker.sock mounts:
 
 ## Provisioning a Fresh Server
 
-### 1. Run setup.sh
+### 1. Hetzner — Create server
 
-On the fresh Hetzner server as root:
+In the [Hetzner Cloud Console](https://console.hetzner.cloud):
+- Create CX33 (4 vCPU · 8 GB · 80 GB SSD), Ubuntu 24.04
+- Add a public IPv4 (required — GitHub and most tooling is IPv4-only)
+- Add your SSH public key for root access
+
+### 2. Run setup.sh
+
+SSH as root, then:
 
 ```bash
 git clone https://github.com/jkrumm/hetzner-vps /home/jkrumm/hetzner-vps
 bash /home/jkrumm/hetzner-vps/scripts/setup.sh
 ```
 
-Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, Doppler, hcloud, Tailscale), creates external Docker networks, drops the cron job for Postgres backups.
+Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, Doppler, hcloud, Tailscale), creates external Docker networks, drops cron job for Postgres backups.
 
-### 2. Post-setup (as jkrumm)
+### 3. Tailscale
 
 ```bash
-# Connect to Tailscale — required before locking down SSH
-sudo tailscale up
-
-# Bind sshd to Tailscale interface only
-# Edit /etc/ssh/sshd_config.d/99-hardening.conf → set ListenAddress <tailscale-ip>
-sudo systemctl restart sshd
-# ⚠ Verify Tailscale SSH works before closing this session
-
-# Configure Doppler
-doppler login && doppler setup   # project: vps, config: prod
-
-# Apply cloud firewall, then assign to server in hcloud dashboard
-cd ~/hetzner-vps && make firewall
-
-# Cloudflare dashboard → Zero Trust → Tunnels → create tunnel → copy token to Doppler as CLOUDFLARE_TUNNEL_TOKEN
-
-# Start everything
-make up
-
-# Cloudflare dashboard → tunnel → Public Hostnames → *.DOMAIN → https://traefik:443 (TLS verify: off)
+sudo tailscale up   # complete auth in browser
+tailscale ip -4     # note the assigned Tailscale IP (100.x.x.x)
 ```
+
+Then bind sshd to the Tailscale interface:
+```bash
+# Edit /etc/ssh/sshd_config.d/99-hardening.conf
+# Uncomment and set: ListenAddress <tailscale-ip>
+sudo systemctl restart ssh
+# ⚠ Open a second SSH session via Tailscale IP to verify before closing this one
+```
+
+Add the server to your local `~/.ssh/config`:
+```
+Host vps
+    HostName <tailscale-ip>
+    User jkrumm
+```
+
+### 4. Doppler
+
+```bash
+# On server as jkrumm:
+doppler login
+doppler setup   # select project: vps, config: prod
+```
+
+Create the Doppler project first at [dashboard.doppler.com](https://dashboard.doppler.com) if it doesn't exist.
+
+### 5. Populate Doppler secrets
+
+See the **Secrets** section below for each variable and how to obtain it. All must be set before `make up`.
+
+### 6. Cloudflare Tunnel
+
+1. [Cloudflare dashboard](https://dash.cloudflare.com) → Zero Trust → Networks → Tunnels → **Create tunnel**
+2. Name it (e.g. `vps`), copy the tunnel token
+3. Set in Doppler: `CLOUDFLARE_TUNNEL_TOKEN=<token>`
+
+### 7. Hetzner Firewall
+
+```bash
+cd ~/hetzner-vps && make firewall
+```
+
+Then in Hetzner console: **Firewalls** → assign `vps-firewall` to the server. This enforces zero inbound rules at the Hetzner level.
+
+### 8. Start the stack
+
+```bash
+make up
+```
+
+Verify: `make ps` — all containers should be running within ~30 seconds.
+
+### 9. Cloudflare public hostnames
+
+In Cloudflare dashboard → Tunnel → **Public Hostnames**:
+- Add `*.<DOMAIN>` → `https://traefik:443`, TLS verify: **off**
+
+Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 min — check `docker logs traefik | grep -i acme`).
 
 ---
 
 ## Secrets
 
-Doppler project `vps`, config `prod`. Full list in `.env.example`.
+Doppler project `vps`, config `prod`. No `.env` file — Doppler is the only secrets store.
 
-| Variable | Description |
-|-|-|
-| `DOMAIN` | Apex domain — wildcard cert covers `*.DOMAIN` |
-| `ACME_EMAIL` | Let's Encrypt registration email |
-| `CF_DNS_API_TOKEN` | Cloudflare token with `Zone:DNS:Edit` scope (DNS-01 challenge) |
-| `CLOUDFLARE_TUNNEL_TOKEN` | Tunnel token from Cloudflare dashboard → Zero Trust → Tunnels |
-| `POSTGRES_DB/USER/PASSWORD` | Database credentials |
-| `AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY` | Object storage credentials |
-| `AWS_S3_BUCKET/ENDPOINT` | Backup destination |
-| `UPTIME_KUMA_PUSH_URL` | Heartbeat push URL for backup monitor |
-| `WATCHTOWER_PUSHOVER_TOKEN/USER_KEY` | Pushover app token + user key |
-| `BESZEL_AGENT_KEY` | SSH public key from Beszel hub |
-| `SIGNOZ_OTLP_ENDPOINT` | `<tailscale-ip>:4317` of homelab SigNoz |
+**Domain + TLS**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `DOMAIN` | `example.com` | Your apex domain — wildcard cert covers `*.DOMAIN` |
+| `ACME_EMAIL` | `you@example.com` | Email for Let's Encrypt notifications |
+| `CF_DNS_API_TOKEN` | `<token>` | Cloudflare → My Profile → API Tokens → Create Token → "Edit zone DNS" template → scope to your zone |
+| `CLOUDFLARE_TUNNEL_TOKEN` | `<token>` | Cloudflare → Zero Trust → Networks → Tunnels → Create tunnel → copy token |
+
+**PostgreSQL**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `POSTGRES_USER` | `postgres` | Superuser name (default: `postgres`) |
+| `POSTGRES_DB` | `postgres` | Default database name |
+| `POSTGRES_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` |
+
+Apps create their own users and databases on top of this superuser.
+
+**Backups (S3-compatible object storage)**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `AWS_ACCESS_KEY_ID` | `<key>` | Object storage provider access key |
+| `AWS_SECRET_ACCESS_KEY` | `<secret>` | Object storage provider secret |
+| `AWS_S3_BUCKET` | `<bucket>` | Bucket name |
+| `AWS_S3_ENDPOINT` | `https://...` | Provider endpoint URL (e.g. Hetzner Object Storage) |
+| `UPTIME_KUMA_PUSH_URL` | `https://...` | Uptime Kuma → Add monitor → Push type → copy URL |
+
+**Watchtower (Pushover notifications)**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `WATCHTOWER_PUSHOVER_TOKEN` | `<token>` | [pushover.net](https://pushover.net) → Create application → API token |
+| `WATCHTOWER_PUSHOVER_USER_KEY` | `<key>` | [pushover.net](https://pushover.net) → Your user key (top of dashboard) |
+
+**Monitoring**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `BESZEL_AGENT_KEY` | `ssh-ed25519 AAAA...` | Beszel hub UI → Add System → address `<tailscale-ip>:45876` → copy SSH public key shown |
+| `SIGNOZ_OTLP_ENDPOINT` | `<tailscale-ip>:4317` | Tailscale IP of the homelab running SigNoz |
+
+**RollHook (add when deploying)**
+
+| Variable | Value | How to get |
+|-|-|-|
+| `ROLLHOOK_ADMIN_TOKEN` | `<generated>` | Generate: `openssl rand -hex 32` — never leave the server |
+| `ROLLHOOK_WEBHOOK_TOKEN` | `<generated>` | Generate: `openssl rand -hex 32` — put in GitHub repo secrets |
 
 ---
 
@@ -209,7 +292,7 @@ services:
       retries: 5
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.myapp.rule=Host(`app.<your-domain>`)"
+      - "traefik.http.routers.myapp.rule=Host(`app.<DOMAIN>`)"
       - "traefik.http.routers.myapp.entrypoints=websecure"
       - "traefik.http.routers.myapp.tls.certresolver=letsencrypt"
       - "traefik.http.services.myapp.loadbalancer.server.port=3000"
@@ -276,7 +359,7 @@ All dashboards are Tailscale-only — no public routes.
 | Dozzle | homelab Dozzle hub | Live container logs |
 | SigNoz | homelab SigNoz | Traces, metrics, logs (OTLP) |
 | Watchtower | Pushover only (warn level) | Container update failures |
-| Traefik | `https://traefik.<your-domain>` | Router/service map, cert status |
+| Traefik | `https://traefik.<DOMAIN>` | Router/service map, cert status |
 
 Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` middleware (IP allowlist: `100.64.0.0/10`).
 

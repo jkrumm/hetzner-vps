@@ -2,8 +2,6 @@
 
 Infrastructure-as-code for a Hetzner CX33 VPS (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking, infra (databases), and monitoring.
 
-> **Servers:** `vps` = CX33 (this repo, Doppler project `vps`). `sds` = old CX43 (8 vCPU · 16 GB · 160 GB SSD, Doppler project `hetzner-vps`).
-
 ---
 
 ## Quick Reference
@@ -41,13 +39,13 @@ git push && ssh vps "cd ~/hetzner-vps && git pull"
 | Skill | Context | Purpose |
 |-|-|-|
 | `/audit` | main | 7-phase health audit: resources, containers, tunnel, Tailscale, errors, backup, manual upgrades (Postgres + Valkey) |
-| `/docs` | main | Documentation maintenance — sync compose files against README/CLAUDE.md, verify .env.example coverage |
+| `/docs` | main | Documentation maintenance — sync compose files against README/CLAUDE.md, verify Secrets section coverage |
 
 ---
 
 ## Secrets
 
-Doppler project `vps`, config `prod`. Variable names in `.env.example`.
+Doppler project `vps`, config `prod`. Variable names and setup instructions in README.md → Secrets section.
 
 **Never write actual values in this repo** — use `<placeholder>` format in docs.
 
@@ -118,7 +116,7 @@ scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           hcloud CLI firewall rules — IaC for Hetzner Cloud Firewall
 cron/pg-backup                Dropped into /etc/cron.d/ — runs backup at 03:00 daily
-.env.example                  All Doppler variable names (no values)
+README.md → Secrets           All Doppler variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
 ```
 
