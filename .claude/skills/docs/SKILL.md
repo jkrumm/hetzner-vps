@@ -1,6 +1,9 @@
-# VPS Documentation Maintenance
+---
+name: docs
+description: Documentation maintenance — sync compose files against README/CLAUDE.md service tables, verify Secrets section coverage, check Makefile targets
+---
 
-**Context:** main
+# VPS Documentation Maintenance
 
 **When to use:**
 - After adding or removing services in any compose file
@@ -12,9 +15,10 @@
 1. Diffs compose files against README.md and CLAUDE.md service tables
 2. Verifies README.md Secrets section covers every `${VAR}` referenced in compose files and scripts
 3. Checks Makefile targets match what CLAUDE.md Quick Reference documents
-4. Flags internal socket-proxy networks that are missing from CLAUDE.md Networks section
+4. Flags internal socket-proxy networks missing from CLAUDE.md Networks section
 5. Detects services with `com.centurylinklabs.watchtower.enable=false` not documented in upgrade procedures
-6. Updates stale documentation
+6. Scans for hardcoded real hostnames/domains/IPs in tracked files
+7. Updates stale documentation
 
 **What this skill does NOT do:**
 - Execute infrastructure changes
@@ -36,6 +40,11 @@
 - [ ] Every `${VAR}` in `scripts/` appears in README.md Secrets section
 - [ ] No variables documented in README.md Secrets that are no longer used in any compose file or script
 
+Run to get full variable list:
+```bash
+grep -h '\${' compose*.yml scripts/*.sh | grep -oE '\$\{[A-Z_]+\}' | sort -u
+```
+
 ### Network Documentation
 - [ ] All external networks in compose files match what `setup.sh` creates
 - [ ] All internal socket-proxy networks documented in CLAUDE.md Networks section
@@ -56,14 +65,21 @@ Services with `com.centurylinklabs.watchtower.enable=false` require manual upgra
 
 If a new excluded container appears, flag it and prompt to add upgrade procedure.
 
+### Security — No Sensitive Data in Repo
+Scan for real values that should be placeholders:
+- [ ] No real domain names (e.g. `example.com` replacing `<DOMAIN>`) in README or CLAUDE.md
+- [ ] No real IPs (public or Tailscale) in any tracked file
+- [ ] No real email addresses
+- [ ] No real hostnames beyond placeholder format (`<registry-domain>`, `<tailscale-ip>`, etc.)
+
 ---
 
 ## Validation Checklist
 
 After updates:
 - [ ] README stack table image names match compose files
-- [ ] README.md Secrets section covers all vars (run: `grep -h '\${' compose*.yml scripts/*.sh | grep -oE '\$\{[A-Z_]+\}' | sort -u`)
-- [ ] No stale service names (CrowdSec, WUD, etc.) remain anywhere
+- [ ] README.md Secrets section covers all vars
+- [ ] No stale service names remain anywhere
 - [ ] Middleware names consistent across CLAUDE.md, README.md, and compose examples
 - [ ] CLAUDE.md Quick Reference matches Makefile
 
@@ -86,6 +102,7 @@ After updates:
 
 ### Flagged for Review
 - New Watchtower-excluded container: [name] — add upgrade procedure?
+- Possible sensitive data: [file:line] — [value]
 
 Next: /commit
 ```

@@ -1,8 +1,12 @@
+---
+name: audit
+description: Full health audit of the Hetzner VPS — system resources, containers, Cloudflare tunnel, Tailscale, errors, backup status, and manual upgrade checks
+---
+
 # VPS Audit
 
 Run a full health audit of the Hetzner VPS across 7 sequential phases, then offer to fix each issue found.
 
-**Context:** main (interactive — repair actions require confirmation)
 **Execution:** Always via `ssh vps "..."` — never local commands
 
 ---
@@ -35,6 +39,10 @@ ssh vps "docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -v ' Up '"
 ssh vps "docker inspect \$(docker ps -q) --format '{{.Name}} restarts={{.RestartCount}}' 2>/dev/null | grep -v 'restarts=0'"
 ```
 
+```bash
+ssh vps "docker system df"
+```
+
 **Expected running containers:**
 - Networking: `cloudflared`, `traefik`, `socket-proxy`
 - Infra: `postgres`, `redis`
@@ -43,6 +51,7 @@ ssh vps "docker inspect \$(docker ps -q) --format '{{.Name}} restarts={{.Restart
 **Thresholds:**
 - CRITICAL: any expected container not running
 - WARN: restart count >3 on any container
+- WARN: reclaimable Docker images >500MB (offer `docker image prune -f`)
 
 ### Phase 3: Cloudflare Tunnel Health
 
@@ -78,7 +87,7 @@ ssh vps "for svc in traefik cloudflared otel-collector; do echo \"=== \$svc ===\
 List recent S3 backups to verify the daily cron ran:
 
 ```bash
-ssh vps "doppler run -- aws s3 ls \${AWS_S3_BUCKET}/ --endpoint-url \${AWS_S3_ENDPOINT} | tail -5"
+ssh vps "doppler run --project vps --config prod -- aws s3 ls \${AWS_S3_BUCKET}/backups/ --endpoint-url \${AWS_S3_ENDPOINT} | tail -5"
 ```
 
 **Thresholds:**
@@ -123,6 +132,7 @@ Then use WebSearch to check:
 
 ## [2/7] Container Health      🟢/🟡/🔴
 <list non-running or high-restart containers; "all running" if clean>
+<Docker disk usage summary if reclaimable >500MB>
 
 ## [3/7] Cloudflare Tunnel     🟢/🟡/🔴
 <connection status, any reconnect events>
@@ -153,15 +163,15 @@ For each CRITICAL/WARN finding, propose the fix and ask for confirmation before 
 
 | Finding | Proposed Fix |
 |-|-|
-| Container not running (networking) | `ssh vps "cd ~/hetzner-vps && doppler run -- docker compose -f compose.networking.yml up -d <name>"` |
-| Container not running (infra) | `ssh vps "cd ~/hetzner-vps && doppler run -- docker compose -f compose.infra.yml up -d <name>"` |
-| Container not running (monitoring) | `ssh vps "cd ~/hetzner-vps && doppler run -- docker compose -f compose.monitoring.yml up -d <name>"` |
+| Container not running (networking) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d <name>"` |
+| Container not running (infra) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.infra.yml up -d <name>"` |
+| Container not running (monitoring) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.monitoring.yml up -d <name>"` |
 | Container restart count >3 | Show `docker logs <name> --tail=20`, offer restart via appropriate stack |
-| Cloudflared errors | `ssh vps "cd ~/hetzner-vps && doppler run -- docker compose -f compose.networking.yml up -d --force-recreate cloudflared"` |
+| Cloudflared errors | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d --force-recreate cloudflared"` |
 | Tailscale down | `ssh vps "sudo systemctl restart tailscaled"` |
 | Docker image bloat | `ssh vps "docker image prune -f"` (dangling only — safe) |
-| Disk >95% | Report + offer `ssh vps "docker image prune -f"` — confirm before running; do NOT auto-run `system prune` |
-| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/hetzner-vps && doppler run -- ./scripts/backup-pg.sh"` |
+| Disk >95% | Report + offer `docker image prune -f` — confirm before running; do NOT auto-run `system prune` |
+| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- ./scripts/backup-pg.sh"` |
 | Postgres upgrade available | See "Upgrade Procedures" in CLAUDE.md — backup first, then pull + recreate |
 | Valkey upgrade available | See "Upgrade Procedures" in CLAUDE.md — pull + recreate (data in volume) |
 
