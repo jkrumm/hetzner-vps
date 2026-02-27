@@ -18,7 +18,7 @@ Handle any Cloudflare DNS or tunnel operation for VPS-hosted apps.
 The VPS has a single Cloudflare Tunnel. Its ID is stored in Doppler as `CF_TUNNEL_ID`.
 
 **Wildcard ingress rule:** `*.DOMAIN → https://traefik:443` (TLS verify: off)
-- Set once after provisioning: `make cf-tunnel-set`
+- Set once after provisioning (see "Set wildcard tunnel ingress rule" below)
 - Catches all subdomains that have a CNAME DNS record pointing to this tunnel
 - Does NOT affect other Cloudflare tunnels (HomeLab, etc.) — each tunnel evaluates its own ingress rules independently
 
@@ -41,7 +41,7 @@ The VPS has a single Cloudflare Tunnel. Its ID is stored in Doppler as `CF_TUNNE
 
 `CF_ZONE_ID` is the zone for the primary `DOMAIN`. For other domains:
 1. Look up the zone ID via API (see below)
-2. The same `CF_API_TOKEN` works if it's scoped to "All zones" or includes the target zone
+2. The same `CF_API_TOKEN` works as long as it's scoped to "All zones"
 
 ---
 
@@ -50,7 +50,6 @@ The VPS has a single Cloudflare Tunnel. Its ID is stored in Doppler as `CF_TUNNE
 Always authenticate via Doppler. Construct API calls like this:
 
 ```bash
-# Single-line API call via doppler
 ssh vps "doppler run --project vps --config prod -- \
   curl -s -X GET 'https://api.cloudflare.com/client/v4/zones' \
     -H 'Authorization: Bearer \${CF_API_TOKEN}' \
@@ -67,14 +66,9 @@ The `doppler run --` prefix injects all secrets as environment variables. `${CF_
 
 ```bash
 ssh vps "doppler run --project vps --config prod -- \
-  curl -s -X GET 'https://api.cloudflare.com/client/v4/accounts/\${CF_ACCOUNT_ID}/cfd_tunnel/\${CF_TUNNEL_ID}/configurations' \
+  curl -s 'https://api.cloudflare.com/client/v4/accounts/\${CF_ACCOUNT_ID}/cfd_tunnel/\${CF_TUNNEL_ID}/configurations' \
     -H 'Authorization: Bearer \${CF_API_TOKEN}' \
     | python3 -m json.tool"
-```
-
-Or via Makefile shortcut (from VPS):
-```bash
-ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- make cf-tunnel-get"
 ```
 
 ### Add a DNS CNAME record (new app subdomain)
@@ -88,18 +82,13 @@ ssh vps "doppler run --project vps --config prod -- \
     | python3 -c 'import json,sys; r=json.load(sys.stdin); print(\"OK:\",r[\"result\"][\"name\"]) if r[\"success\"] else print(\"ERR:\",r[\"errors\"])'"
 ```
 
-Or via `scripts/cf-tunnel-ingress.sh`:
-```bash
-ssh vps "cd ~/hetzner-vps && make cf-dns-add subdomain=myapp"
-```
-
 ### List DNS records for a zone
 
 ```bash
 ssh vps "doppler run --project vps --config prod -- \
-  curl -s 'https://api.cloudflare.com/client/v4/zones/\${CF_ZONE_ID}/dns_records?type=CNAME&per_page=100' \
+  curl -s 'https://api.cloudflare.com/client/v4/zones/\${CF_ZONE_ID}/dns_records?per_page=100' \
     -H 'Authorization: Bearer \${CF_API_TOKEN}' \
-    | python3 -c 'import json,sys; [print(r[\"name\"],\"→\",r[\"content\"]) for r in json.load(sys.stdin)[\"result\"]]'"
+    | python3 -c 'import json,sys; [print(r[\"type\"],r[\"name\"],\"→\",r[\"content\"]) for r in json.load(sys.stdin)[\"result\"]]'"
 ```
 
 ### Delete a DNS record
@@ -115,7 +104,7 @@ ssh vps "doppler run --project vps --config prod -- \
 
 ### Look up Zone ID for a domain
 
-Needed when working with a secondary domain (not in Doppler as `CF_ZONE_ID`):
+Needed when working with a secondary domain (not stored in Doppler as `CF_ZONE_ID`):
 
 ```bash
 ssh vps "doppler run --project vps --config prod -- \
@@ -125,12 +114,6 @@ ssh vps "doppler run --project vps --config prod -- \
 ```
 
 ### Set/update wildcard tunnel ingress rule
-
-```bash
-ssh vps "cd ~/hetzner-vps && make cf-tunnel-set"
-```
-
-Or directly (use this if you need to customize the ingress rules):
 
 ```bash
 ssh vps "doppler run --project vps --config prod -- \
@@ -145,10 +128,7 @@ ssh vps "doppler run --project vps --config prod -- \
 ## Workflow: Add a New Public App
 
 1. Deploy the app compose to VPS (confirm it's running: `make ps`)
-2. Add DNS record:
-   ```bash
-   ssh vps "cd ~/hetzner-vps && make cf-dns-add subdomain=myapp"
-   ```
+2. Add DNS record (subdomain → VPS tunnel CNAME)
 3. Verify: `curl -I https://myapp.<DOMAIN>/health`
 4. No tunnel config changes needed — wildcard ingress already catches it
 
@@ -159,18 +139,17 @@ ssh vps "doppler run --project vps --config prod -- \
 When the app subdomain belongs to a different domain than `DOMAIN`:
 
 1. Look up the zone ID for the secondary domain (see "Look up Zone ID" above)
-2. Use it inline in a curl call (zone IDs aren't secret — they're visible in the dashboard):
+2. Use it inline — zone IDs are not secret (visible in Cloudflare dashboard):
    ```bash
-   ZONE_ID=<found-zone-id>
+   SECONDARY_ZONE_ID=<found-zone-id>
    ssh vps "doppler run --project vps --config prod -- \
-     curl -s -X POST 'https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records' \
+     curl -s -X POST 'https://api.cloudflare.com/client/v4/zones/${SECONDARY_ZONE_ID}/dns_records' \
        -H 'Authorization: Bearer \${CF_API_TOKEN}' \
        -H 'Content-Type: application/json' \
        --data '{\"type\":\"CNAME\",\"name\":\"myapp\",\"content\":\"\${CF_TUNNEL_ID}.cfargotunnel.com\",\"proxied\":true}' \
        | python3 -m json.tool"
    ```
-3. If tunnel ingress wildcard doesn't cover the secondary domain, add a specific ingress rule:
-   - Modify the tunnel config `ingress` array to add `{"hostname": "myapp.other-domain.com", "service": "https://traefik:443", "originRequest": {"noTLSVerify": true}}` before the catch-all `http_status:404` rule
+3. If the secondary domain isn't covered by the wildcard, add a specific ingress rule to the tunnel config (add before the `http_status:404` catch-all)
 
 ---
 
@@ -180,7 +159,7 @@ CF API base: `https://api.cloudflare.com/client/v4`
 
 | Endpoint | Method | Purpose |
 |-|-|-|
-| `/zones` | GET | List zones (add `?name=domain.com` to filter) |
+| `/zones` | GET | List zones (filter: `?name=domain.com`) |
 | `/zones/{zone_id}/dns_records` | GET | List DNS records |
 | `/zones/{zone_id}/dns_records` | POST | Create DNS record |
 | `/zones/{zone_id}/dns_records/{id}` | PUT | Update DNS record |
@@ -189,4 +168,4 @@ CF API base: `https://api.cloudflare.com/client/v4`
 | `/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations` | PUT | Replace tunnel ingress config |
 | `/accounts/{account_id}/cfd_tunnel` | GET | List all tunnels |
 
-All responses follow `{"success": bool, "result": ..., "errors": [...]}`.
+All responses: `{"success": bool, "result": ..., "errors": [...]}`.

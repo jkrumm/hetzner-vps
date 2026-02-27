@@ -1,6 +1,5 @@
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
-        ps backup firewall shell-postgres dev-up dev-down \
-        cf-tunnel-get cf-tunnel-set cf-dns-add
+        ps backup firewall shell-postgres dev-up dev-down
 
 COMPOSE_NET   = doppler run -- docker compose -f compose.networking.yml
 COMPOSE_INFRA = doppler run -- docker compose -f compose.infra.yml
@@ -44,7 +43,3 @@ shell-postgres:
 dev-up:   ; $(COMPOSE_DEV) up -d
 dev-down: ; $(COMPOSE_DEV) down
 
-## Cloudflare Tunnel management (token read from Doppler — never exposed to shell)
-cf-tunnel-get:      ; doppler run -- ./scripts/cf-tunnel-ingress.sh get
-cf-tunnel-set:      ; doppler run -- ./scripts/cf-tunnel-ingress.sh set-wildcard
-cf-dns-add:         ; doppler run -- ./scripts/cf-tunnel-ingress.sh add-dns $(subdomain)

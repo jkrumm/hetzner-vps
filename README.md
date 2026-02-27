@@ -23,11 +23,6 @@ make shell-postgres  # psql shell
 # Ops
 make firewall        # reapply Hetzner Cloud Firewall rules
 
-# Cloudflare tunnel + DNS (always via doppler — token never exposed)
-make cf-tunnel-get                     # show current tunnel ingress config
-make cf-tunnel-set                     # set *.DOMAIN → traefik:443 catch-all
-make cf-dns-add subdomain=myapp        # add proxied CNAME for new app subdomain
-
 # Traefik cert debug
 docker logs traefik 2>&1 | grep -i acme
 
@@ -211,21 +206,14 @@ Verify: `make ps` — all containers should be running within ~30 seconds.
 
 ### 9. Cloudflare tunnel ingress + DNS
 
-Set the wildcard ingress rule (routes all VPS-bound subdomains to Traefik):
-```bash
-cd ~/hetzner-vps && make cf-tunnel-set
-```
+Use the `/cloudflare` Claude Code skill to set the wildcard ingress rule and add DNS records. The skill handles all API calls via `ssh vps "doppler run --"` — the token never leaves Doppler.
 
-Then for each public app subdomain, add a DNS record pointing to this tunnel:
-```bash
-make cf-dns-add subdomain=myapp
-```
-
-Both commands run on the server via `doppler run --` — the API token stays in Doppler, never exposed to shell history or Claude Code.
+- Set wildcard ingress: `*.DOMAIN → https://traefik:443` (once after provisioning)
+- Add DNS record per app subdomain (CNAME → tunnel)
 
 Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 min — check `docker logs traefik | grep -i acme`).
 
-> **Wildcard ingress scope:** The `*.DOMAIN` rule only matches requests already DNS-routed to the VPS tunnel. Other subdomains pointing to different Cloudflare tunnels (HomeLab, etc.) are completely unaffected — each tunnel evaluates its own ingress rules independently.
+> **Wildcard ingress scope:** Only matches requests already DNS-routed to the VPS tunnel. Other subdomains pointing to different tunnels (HomeLab, etc.) are unaffected.
 
 ---
 

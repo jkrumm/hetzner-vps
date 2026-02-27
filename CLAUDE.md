@@ -22,11 +22,6 @@ make shell-postgres      # psql shell
 make backup              # manual pg_dump → S3
 make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
 
-# Cloudflare tunnel + DNS (always via doppler — token never exposed)
-make cf-tunnel-get                    # show current tunnel ingress config
-make cf-tunnel-set                    # set *.DOMAIN → traefik:443 catch-all
-make cf-dns-add subdomain=myapp       # add proxied CNAME for new app subdomain
-
 # Local dev
 make dev-up              # Postgres + Valkey with ports exposed, no Doppler
 make dev-down
@@ -149,7 +144,6 @@ scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docke
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           hcloud CLI firewall rules — IaC for Hetzner Cloud Firewall
-scripts/cf-tunnel-ingress.sh  Cloudflare API: get/set tunnel ingress, add DNS records (always via doppler run)
 cron/pg-backup                Dropped into /etc/cron.d/ — runs backup at 03:00 daily
 README.md → Secrets           All Doppler variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
