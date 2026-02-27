@@ -71,6 +71,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    ports:
+      # Bind websecure entrypoint to Tailscale interface only — dashboard access without Cloudflare.
+      # Public apps are still routed via cloudflared (no internet exposure here).
+      - "${VPS_TAILSCALE_IP}:443:443"
     environment:
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
       # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
