@@ -31,7 +31,7 @@ ps:
 	docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 backup:
-	./scripts/backup-pg.sh
+	doppler run -- ./scripts/backup-pg.sh
 
 firewall:
 	./scripts/firewall.sh

@@ -284,8 +284,8 @@ Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` m
 
 ## TODOs
 
-- **Private registry auth:** When pulling images from `registry.jkrumm.com`, add idempotent login to `setup.sh`:
+- **Private registry auth:** When pulling images from a private registry, add idempotent login to `setup.sh`:
   ```bash
-  doppler secrets get ZOT_PASSWORD --plain | docker login registry.jkrumm.com -u jkrumm --password-stdin
+  doppler secrets get ZOT_PASSWORD --plain | docker login <registry-domain> -u <username> --password-stdin
   ```
   Add `ZOT_PASSWORD` to Doppler. Docker stores creds in `~/.docker/config.json` — Compose picks them up automatically.
