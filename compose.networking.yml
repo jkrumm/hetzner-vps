@@ -121,6 +121,7 @@ services:
       - no-new-privileges:true
     environment:
       CONTAINERS: 1
+      NETWORKS: 1
       SERVICES: 1
       IMAGES: 1
       INFO: 1
