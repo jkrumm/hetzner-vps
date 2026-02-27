@@ -27,7 +27,12 @@ make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
 # Local dev
 make dev-up              # Postgres + Valkey with ports exposed, no Doppler
 make dev-down
+
+# Deploy config changes to server (git pull doesn't work — see note below)
+rsync -av compose.networking.yml compose.infra.yml compose.monitoring.yml jkrumm@100.71.226.122:~/hetzner-vps/
 ```
+
+> **IPv6-only limitation:** `vps` has no IPv4 address. GitHub does not route IPv6 traffic (AAAA records exist but are unreachable — confirmed open issue since 2022). `git clone`, `git pull`, and `git push` to GitHub all fail on the server. Deploy changes by committing locally, pushing to GitHub from your Mac, then rsyncing files to the server over Tailscale.
 
 ---
 

@@ -22,6 +22,7 @@ services:
   # ---------------------------------------------------------------------------
   socket-proxy-watchtower:
     image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy-watchtower
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -47,6 +48,7 @@ services:
   # ---------------------------------------------------------------------------
   watchtower:
     image: containrrr/watchtower:latest
+    container_name: watchtower
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -54,6 +56,7 @@ services:
     environment:
       # Connect to Docker via proxy (no direct docker.sock mount needed)
       DOCKER_HOST: tcp://socket-proxy-watchtower:2375
+      DOCKER_API_VERSION: "1.44"
       # Pushover via shoutrrr — token and user key from Doppler
       WATCHTOWER_NOTIFICATION_URL: "pushover://shoutrrr:${WATCHTOWER_PUSHOVER_TOKEN}@${WATCHTOWER_PUSHOVER_USER_KEY}"
       WATCHTOWER_NOTIFICATIONS_LEVEL: warn
@@ -74,13 +77,18 @@ services:
   # ---------------------------------------------------------------------------
   socket-proxy-monitoring:
     image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy-monitoring
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     environment:
+      PING: 1
+      VERSION: 1
+      INFO: 1
       CONTAINERS: 1
       LOGS: 1
       STATS: 1
+      EVENTS: 1
       POST: 0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -96,11 +104,14 @@ services:
   # ---------------------------------------------------------------------------
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     mem_limit: 256m
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      SIGNOZ_OTLP_ENDPOINT: ${SIGNOZ_OTLP_ENDPOINT}
     volumes:
       - ./otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
     networks:
@@ -119,6 +130,7 @@ services:
   # ---------------------------------------------------------------------------
   beszel-agent:
     image: henrygd/beszel-agent:latest
+    container_name: beszel-agent
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -142,6 +154,7 @@ services:
   # ---------------------------------------------------------------------------
   dozzle:
     image: amir20/dozzle:latest
+    container_name: dozzle
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
