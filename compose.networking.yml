@@ -139,7 +139,8 @@ services:
   # Receives POST /deploy/:app, scales up new container, waits for healthcheck,
   # then removes the old one. Routed publicly via Cloudflare → Traefik.
   #
-  # App compose files must be mounted here for docker-rollout to read them.
+  # Stateless: discovers compose_path + service from running container labels.
+  # App compose dirs must be mounted so docker-rollout can read them.
   # Add one volume per app:  - /home/jkrumm/<app>:/home/jkrumm/<app>:ro
   # ---------------------------------------------------------------------------
   rollhook:
@@ -153,15 +154,13 @@ services:
     environment:
       ADMIN_TOKEN: ${ROLLHOOK_ADMIN_TOKEN}
       WEBHOOK_TOKEN: ${ROLLHOOK_WEBHOOK_TOKEN}
-      ROLLHOOK_CONFIG_PATH: /app/rollhook.config.yaml
       PORT: "7700"
       DOCKER_HOST: tcp://socket-proxy-rollhook:2375
     volumes:
-      - ./config/rollhook/rollhook.config.yaml:/app/rollhook.config.yaml:ro
       - rollhook-data:/app/data
       # Docker registry credentials — required for pulling from private registry
       - /home/jkrumm/.docker/config.json:/root/.docker/config.json:ro
-      # Mount app compose files — one volume per app managed by RollHook
+      # Mount app compose dirs — docker-rollout reads compose.yml from inside the container
       - /home/jkrumm/hetzner-vps/apps/rollhook-marketing:/home/jkrumm/hetzner-vps/apps/rollhook-marketing
 
     healthcheck:
