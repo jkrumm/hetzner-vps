@@ -22,6 +22,10 @@ psql_main <<SQL
 -- Create schema if not exists
 CREATE SCHEMA IF NOT EXISTS umami;
 
+-- pgcrypto must be created by superuser; place it in umami schema so Prisma
+-- migration's "CREATE EXTENSION IF NOT EXISTS pgcrypto" finds it there
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA umami;
+
 -- Create role if not exists, always sync password (for Doppler rotations)
 DO \$\$
 BEGIN
