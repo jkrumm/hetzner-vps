@@ -364,6 +364,43 @@ make shell-postgres   # verify: SELECT version();
 
 ---
 
+## Local Database Access (DataGrip / psql)
+
+Postgres is Docker-internal — no ports exposed on the host. Access via SSH tunnel over Tailscale.
+
+### DataGrip
+
+Create a new **PostgreSQL** data source:
+
+**SSH/SSL tab → Use SSH tunnel:**
+| Field | Value |
+|-|-|
+| Host | `<VPS_TAILSCALE_IP>` (from Doppler: `doppler secrets get VPS_TAILSCALE_IP --project vps --config prod --plain`) |
+| Port | `22` |
+| Username | `jkrumm` |
+| Auth type | Key pair |
+| Private key | `~/.ssh/id_rsa` |
+
+**General tab:**
+| Field | Value |
+|-|-|
+| Host | `172.19.0.2` (Postgres container IP on Docker bridge — fixed, doesn't change) |
+| Port | `5432` |
+| User | from Doppler: `POSTGRES_USER` |
+| Password | from Doppler: `POSTGRES_PASSWORD` |
+| Database | from Doppler: `POSTGRES_DB` |
+
+> **Why not `postgres` as host?** DataGrip resolves the DB hostname locally before establishing the tunnel. `postgres` only resolves inside Docker networks, not on the VPS host. Use the container's bridge IP instead.
+
+### psql via terminal
+
+```bash
+ssh -L 5432:172.19.0.2:5432 vps   # keep open
+psql -h localhost -p 5432 -U $(doppler secrets get POSTGRES_USER --project vps --config prod --plain) postgres
+```
+
+---
+
 ## Monitoring
 
 All dashboards are Tailscale-only — no public routes.
