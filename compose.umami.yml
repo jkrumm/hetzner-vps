@@ -22,6 +22,8 @@ services:
       # ?schema=umami tells Prisma to use the umami schema, not public
       DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=umami
       APP_SECRET: ${UMAMI_APP_SECRET}
+      TRACKER_SCRIPT_NAME: p.js
+      COLLECT_API_ENDPOINT: /api/p
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
       interval: 5s
