@@ -38,6 +38,8 @@ services:
       # Active health check — Traefik stops routing to draining instance immediately
       - "traefik.http.services.rollhook-marketing.loadbalancer.healthcheck.path=/"
       - "traefik.http.services.rollhook-marketing.loadbalancer.healthcheck.interval=5s"
+      # Managed by RollHook — watchtower must not interfere with rolling deployments
+      - "com.centurylinklabs.watchtower.enable=false"
       # www → canonical redirect (301 permanent)
       - "traefik.http.routers.rollhook-marketing-www.rule=Host(`www.rollhook.com`)"
       - "traefik.http.routers.rollhook-marketing-www.entrypoints=websecure"
