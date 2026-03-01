@@ -1,20 +1,24 @@
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
+        umami-up umami-down postgres-setup \
         ps backup firewall shell-postgres dev-up dev-down
 
 COMPOSE_NET   = doppler run -- docker compose -f compose.networking.yml
 COMPOSE_INFRA = doppler run -- docker compose -f compose.infra.yml
 COMPOSE_MON   = doppler run -- docker compose -f compose.monitoring.yml
+COMPOSE_UMAMI = doppler run -- docker compose -f compose.umami.yml
 COMPOSE_DEV   = docker compose -f compose.dev.yml
 
 ## All stacks — bring up in dependency order
 up:
 	$(MAKE) networking-up
 	$(MAKE) infra-up
+	$(MAKE) umami-up
 	$(MAKE) monitoring-up
 
 ## All stacks — tear down in reverse order
 down:
 	$(MAKE) monitoring-down
+	$(MAKE) umami-down
 	$(MAKE) infra-down
 	$(MAKE) networking-down
 
@@ -25,6 +29,11 @@ infra-up:        ; $(COMPOSE_INFRA) up -d
 infra-down:      ; $(COMPOSE_INFRA) down
 monitoring-up:   ; $(COMPOSE_MON) up -d
 monitoring-down: ; $(COMPOSE_MON) down
+umami-up:        ; $(COMPOSE_UMAMI) up -d
+umami-down:      ; $(COMPOSE_UMAMI) down
+
+postgres-setup:
+	doppler run -- ./scripts/setup-postgres.sh
 
 ## Status / ops
 ps:

@@ -8,13 +8,17 @@ Infrastructure-as-code for a Hetzner CX33 VPS (4 vCPU · 8 GB · 80 GB SSD · Ub
 
 ```bash
 # Primary operations
-make up                  # start all stacks in order (networking → infra → monitoring)
+make up                  # start all stacks in order (networking → infra → umami → monitoring)
 make down                # stop all stacks in reverse order
 
 # Targeted restart (one stack)
 make networking-up / make networking-down
 make infra-up    / make infra-down
+make umami-up / make umami-down
 make monitoring-up / make monitoring-down
+
+# Postgres schema/user provisioning
+make postgres-setup      # idempotent schema/user provisioning (run before make umami-up)
 
 # Status + ops
 make ps                  # docker ps with name/status/ports
@@ -69,6 +73,8 @@ Key variables:
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `SIGNOZ_OTLP_ENDPOINT` | OTel collector config (`otel/config.yaml`) |
+| `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.umami.yml` |
+| `UMAMI_APP_SECRET` | Umami session secret — 32+ char random string (`openssl rand -hex 32`) |
 
 ---
 
@@ -134,6 +140,7 @@ Internal networks (created by Docker Compose, not external):
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey)
 compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower + two socket-proxy instances)
+compose.umami.yml             Umami analytics (schema: umami in main DB, Watchtower auto-update)
 compose.dev.yml               Local dev (Postgres + Valkey with ports exposed, no Doppler)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
@@ -142,6 +149,7 @@ traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
 otel/config.yaml              OTLP receiver → batch processor → SigNoz exporter (Tailscale)
 scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron)
+scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           hcloud CLI firewall rules — IaC for Hetzner Cloud Firewall
@@ -163,6 +171,27 @@ Makefile                      Operational shortcuts
 **Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Pushover via shoutrrr at warn level (failures only). Runs daily at 04:00.
 
 **OTel Collector** — ports `4317` (gRPC) and `4318` (HTTP) bound to all interfaces. Apps on `monitoring-net` reach it by hostname. Protected from public internet by Hetzner Firewall + UFW.
+
+**Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
+
+---
+
+## Postgres Schema Model
+
+All apps share one database (`${POSTGRES_DB}`). Each app gets its own schema and a dedicated user with schema-only access. The superuser can JOIN across schemas natively.
+
+Pattern for new apps:
+1. Add `APP_DB_PASSWORD` to Doppler
+2. Add a setup block to `scripts/setup-postgres.sh` (CREATE SCHEMA + ROLE + GRANTs)
+3. Run `make postgres-setup`
+4. In compose: `DATABASE_URL: postgresql://app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=app`
+
+Current schemas:
+
+| Schema | App | User |
+|-|-|-|
+| public | (main app / reserved) | ${POSTGRES_USER} |
+| umami | Umami analytics | umami |
 
 ---
 

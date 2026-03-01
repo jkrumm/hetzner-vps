@@ -1,0 +1,45 @@
+---
+# Umami analytics — https://umami.is
+# Schema: umami (within main Postgres database)
+# Deploy: doppler run -- docker compose -f compose.umami.yml up -d
+# Pre-requisite: make postgres-setup
+
+networks:
+  proxy:
+    external: true
+  postgres-net:
+    external: true
+
+services:
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      # ?schema=umami tells Prisma to use the umami schema, not public
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=umami
+      APP_SECRET: ${UMAMI_APP_SECRET}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.umami.rule=Host(`umami.${DOMAIN}`)"
+      - "traefik.http.routers.umami.entrypoints=websecure"
+      - "traefik.http.routers.umami.tls.certresolver=letsencrypt"
+      - "traefik.http.services.umami.loadbalancer.server.port=3000"
+      - "traefik.http.routers.umami.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.umami.loadbalancer.healthcheck.path=/api/heartbeat"
+      - "traefik.http.services.umami.loadbalancer.healthcheck.interval=5s"
+    networks:
+      - proxy
+      - postgres-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
