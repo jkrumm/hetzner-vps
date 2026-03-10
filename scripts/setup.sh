@@ -27,8 +27,26 @@ warn() { echo "[$(date +%H:%M:%S)] WARN: $*"; }
 log "Setting hostname to vps..."
 hostnamectl set-hostname vps
 
+# cloud-init manages /etc/hosts and resets it on reboot — disable and fix manually
+if grep -q 'manage_etc_hosts.*true' /etc/cloud/cloud.cfg 2>/dev/null; then
+  log "Disabling cloud-init manage_etc_hosts..."
+  sed -i 's/manage_etc_hosts: true/manage_etc_hosts: false/' /etc/cloud/cloud.cfg
+fi
+if ! grep -q '127.0.1.1 vps' /etc/hosts; then
+  sed -i "s/^127\.0\.1\.1.*/127.0.1.1 vps/" /etc/hosts
+  grep -q '127.0.1.1 vps' /etc/hosts || echo '127.0.1.1 vps' >> /etc/hosts
+fi
+
 log "Setting timezone to UTC..."
 timedatectl set-timezone UTC
+
+# Configure needrestart to auto-restart services without interactive prompts
+if [[ -f /etc/needrestart/needrestart.conf ]]; then
+  sed -i "s/^#\?\s*\$nrconf{restart}.*$/\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf
+else
+  mkdir -p /etc/needrestart
+  echo "\$nrconf{restart} = 'a';" > /etc/needrestart/needrestart.conf
+fi
 
 log "Updating system packages..."
 apt-get update -qq && apt-get upgrade -y -qq
@@ -42,6 +60,15 @@ else
   log "Creating user ${DEPLOY_USER}..."
   adduser --disabled-password --gecos "" "${DEPLOY_USER}"
   usermod -aG sudo "${DEPLOY_USER}"
+fi
+
+# Passwordless sudo — deploy user has no password; NOPASSWD required for operational commands
+if [[ ! -f "/etc/sudoers.d/${DEPLOY_USER}" ]]; then
+  log "Configuring passwordless sudo for ${DEPLOY_USER}..."
+  echo "${DEPLOY_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${DEPLOY_USER}"
+  chmod 440 "/etc/sudoers.d/${DEPLOY_USER}"
+else
+  skip "Sudoers entry for ${DEPLOY_USER} already exists"
 fi
 
 # Add SSH keys — try GitHub first, fall back to root's authorized_keys
