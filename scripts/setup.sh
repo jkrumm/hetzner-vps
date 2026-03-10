@@ -210,6 +210,9 @@ fi
 # 8. Install tooling
 # =============================================================================
 
+# make — required for Makefile targets
+apt-get install -y -qq make
+
 # AWS CLI v2 (for S3 backup uploads) — official installer from awscli.amazonaws.com
 if command -v aws &>/dev/null; then
   skip "AWS CLI already installed ($(aws --version 2>&1 | cut -d' ' -f1))"
