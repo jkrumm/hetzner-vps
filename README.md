@@ -1,6 +1,6 @@
-# hetzner-vps
+# vps
 
-Production Docker Compose stack for a Hetzner CX33 (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04). Single-node, no orchestration. Cloudflare Tunnel handles all public ingress — zero inbound ports on the server. Three compose stacks by concern: networking, infra, monitoring.
+Production Docker Compose stack for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubuntu 24.04). Single-node, no orchestration. Cloudflare Tunnel handles all public ingress — zero inbound ports on the server. Three compose stacks by concern: networking, infra, monitoring.
 
 ---
 
@@ -21,7 +21,7 @@ make backup          # manual pg_dump → S3
 make shell-postgres  # psql shell
 
 # Ops
-make firewall        # reapply Hetzner Cloud Firewall rules
+make firewall        # show UFW status
 
 # Traefik cert debug
 docker logs traefik 2>&1 | grep -i acme
@@ -110,11 +110,11 @@ Docker API access — no direct docker.sock mounts:
 
 ## Design Decisions
 
-**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Hetzner Firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.<DOMAIN>`) — required so cloudflared can verify the TLS handshake with Traefik internally.
+**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Provider firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.<DOMAIN>`) — required so cloudflared can verify the TLS handshake with Traefik internally.
 
 **Four socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. RollHook and Watchtower each get a dedicated proxy with POST=1 on isolated networks — write access never shared between them.
 
-**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only. Port 22 is absent from both Hetzner Firewall and UFW. Zero SSH attack surface from the public internet.
+**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only. Port 22 is absent from both the provider firewall and UFW. Zero SSH attack surface from the public internet.
 
 **Watchtower over WUD.** Auto-updates all containers except Postgres and Valkey (opted out via label). Pushover notifications at warn level (failures only — not every update). Postgres and Valkey are excluded: major version bumps can have data format implications, updates must be deliberate with a backup first.
 
@@ -122,29 +122,26 @@ Docker API access — no direct docker.sock mounts:
 
 **Doppler for secrets.** All sensitive values in Doppler project `vps`, config `prod`. Zero secrets in the repo — no `.env` or `.env.example`. Variable names and setup instructions documented in the Secrets section below. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
 
-**No Terraform.** Hetzner Firewall managed via hcloud CLI script (`scripts/firewall.sh`). Single-server setup doesn't justify state management overhead.
+**No Terraform.** Single-server setup doesn't justify state management overhead. UFW handles firewall rules; provider-level firewall configured manually via hosting panel.
 
 ---
 
 ## Provisioning a Fresh Server
 
-### 1. Hetzner — Create server
+### 1. Create server
 
-In the [Hetzner Cloud Console](https://console.hetzner.cloud):
-- Create CX33 (4 vCPU · 8 GB · 80 GB SSD), Ubuntu 24.04
-- Add a public IPv4 (required — GitHub and most tooling is IPv4-only)
-- Add your SSH public key for root access
+Order a VPS (Ubuntu 24.04) with a public IPv4. Add your SSH public key for root access via the hosting panel.
 
 ### 2. Run setup.sh
 
 SSH as root, then:
 
 ```bash
-git clone https://github.com/jkrumm/hetzner-vps /home/jkrumm/hetzner-vps
-bash /home/jkrumm/hetzner-vps/scripts/setup.sh
+git clone https://github.com/jkrumm/vps /home/jkrumm/vps
+bash /home/jkrumm/vps/scripts/setup.sh
 ```
 
-Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, Doppler, hcloud, Tailscale), creates external Docker networks, drops cron job for Postgres backups.
+Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, Doppler, Tailscale), creates external Docker networks, drops cron job for Postgres backups.
 
 ### 3. Tailscale
 
@@ -188,13 +185,11 @@ See the **Secrets** section below for each variable and how to obtain it. All mu
 2. Name it (e.g. `vps`), copy the tunnel token
 3. Set in Doppler: `CLOUDFLARE_TUNNEL_TOKEN=<token>`
 
-### 7. Hetzner Firewall
+### 7. Provider Firewall
 
-```bash
-cd ~/hetzner-vps && make firewall
-```
+Configure zero inbound rules in the hosting panel (no ports open from the internet). SSH is Tailscale-only; public traffic is Cloudflare Tunnel outbound-only.
 
-Then in Hetzner console: **Firewalls** → assign `vps-firewall` to the server. This enforces zero inbound rules at the Hetzner level.
+Verify UFW on the server: `make firewall`
 
 ### 8. Start the stack
 
@@ -255,7 +250,7 @@ Apps create their own users and databases on top of this superuser.
 | `AWS_ACCESS_KEY_ID` | `<key>` | Object storage provider access key |
 | `AWS_SECRET_ACCESS_KEY` | `<secret>` | Object storage provider secret |
 | `AWS_S3_BUCKET` | `<bucket>` | Bucket name |
-| `AWS_S3_ENDPOINT` | `https://...` | Provider endpoint URL (e.g. Hetzner Object Storage) |
+| `AWS_S3_ENDPOINT` | `https://...` | S3-compatible provider endpoint URL |
 | `UPTIME_KUMA_PUSH_URL` | `https://...` | Uptime Kuma → Add monitor → Push type → copy URL |
 
 **Watchtower (ntfy notifications)**

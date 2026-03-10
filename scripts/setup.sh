@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Hetzner VPS — Initial Server Provisioning & Hardening
+# VPS — Initial Server Provisioning & Hardening
 # Run as root on a fresh Ubuntu 24.04 server.
 # Idempotent: safe to re-run.
-# Supports IPv6-only hosts (CX33 without IPv4).
 # =============================================================================
 set -euo pipefail
 
@@ -13,7 +12,7 @@ export LC_ALL=C.UTF-8
 
 DEPLOY_USER="jkrumm"
 GITHUB_USERNAME="jkrumm"
-REPO_DIR="/home/${DEPLOY_USER}/hetzner-vps"
+REPO_DIR="/home/${DEPLOY_USER}/vps"
 
 log()  { echo "[$(date +%H:%M:%S)] $*"; }
 skip() { echo "[$(date +%H:%M:%S)] SKIP: $*"; }
@@ -23,8 +22,14 @@ warn() { echo "[$(date +%H:%M:%S)] WARN: $*"; }
 [[ $EUID -ne 0 ]] && echo "Run as root." && exit 1
 
 # =============================================================================
-# 1. System update
+# 1. Hostname + timezone + system update
 # =============================================================================
+log "Setting hostname to vps..."
+hostnamectl set-hostname vps
+
+log "Setting timezone to UTC..."
+timedatectl set-timezone UTC
+
 log "Updating system packages..."
 apt-get update -qq && apt-get upgrade -y -qq
 
@@ -119,7 +124,7 @@ ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 # No inbound 80/443 — Traefik has no host ports; all public traffic enters via
-# Cloudflare Tunnel (outbound-only). Hetzner Firewall enforces zero inbound too.
+# Cloudflare Tunnel (outbound-only).
 # Tailscale interface: allow everything (SSH, monitoring agents, OTel)
 ufw allow in on tailscale0 comment "Tailscale"
 ufw --force enable
@@ -180,6 +185,27 @@ else
   usermod -aG docker "${DEPLOY_USER}"
 fi
 
+# Docker daemon config — global log limits as safety net, live-restore for no-downtime daemon restart
+if [[ ! -f /etc/docker/daemon.json ]]; then
+  log "Configuring Docker daemon..."
+  mkdir -p /etc/docker
+  cat > /etc/docker/daemon.json << 'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "live-restore": true
+}
+EOF
+  if command -v docker &>/dev/null; then
+    systemctl reload docker || systemctl restart docker
+  fi
+else
+  skip "Docker daemon.json already exists"
+fi
+
 # =============================================================================
 # 8. Install tooling
 # =============================================================================
@@ -216,24 +242,6 @@ else
     warn "Doppler CLI install failed (IPv4-only CDN unreachable from IPv6 host)."
     warn "Install via apt repo manually, or copy binary from another host:"
     warn "  scp <other-host>:/usr/bin/doppler /usr/local/bin/doppler"
-  fi
-fi
-
-# hcloud CLI — downloads from GitHub; may be unavailable on IPv6-only hosts
-if command -v hcloud &>/dev/null; then
-  skip "hcloud CLI already installed"
-else
-  log "Installing hcloud CLI..."
-  HCLOUD_VERSION=$(curl -s --max-time 10 https://api.github.com/repos/hetznercloud/cli/releases/latest 2>/dev/null \
-    | grep '"tag_name"' | cut -d'"' -f4 || true)
-  if [[ -n "${HCLOUD_VERSION}" ]]; then
-    curl -fsSL "https://github.com/hetznercloud/cli/releases/download/${HCLOUD_VERSION}/hcloud-linux-amd64.tar.gz" \
-      | tar -xz -C /usr/local/bin hcloud
-    log "hcloud CLI installed: ${HCLOUD_VERSION}"
-  else
-    warn "Could not install hcloud CLI (GitHub unreachable on IPv6-only host)."
-    warn "Install manually from: https://github.com/hetznercloud/cli/releases/latest"
-    warn "Or run from your local machine: make firewall (via SSH)"
   fi
 fi
 
@@ -305,8 +313,8 @@ log "                          doppler login && doppler setup"
 log "                          (project: vps, config: prod)"
 log " 4. Cloudflare Tunnel:    Create tunnel in Cloudflare dashboard → Zero Trust → Tunnels"
 log "                          Copy token → Doppler as CLOUDFLARE_TUNNEL_TOKEN"
-log " 5. Apply firewall:       cd ${REPO_DIR} && make firewall"
-log "                          Then assign firewall to server in hcloud dashboard"
+log " 5. UFW status:            ufw status verbose"
+log "                          Configure provider-level firewall (zero inbound) via hosting panel"
 log " 6. Start all stacks:     make up"
 log "                          (networking → infra → monitoring in order)"
 log "============================================================"

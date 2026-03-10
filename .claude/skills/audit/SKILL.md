@@ -1,11 +1,11 @@
 ---
 name: audit
-description: Full health audit of the Hetzner VPS — system resources, containers, Cloudflare tunnel, Tailscale, errors, backup status, and manual upgrade checks
+description: Full health audit of the VPS — system resources, containers, Cloudflare tunnel, Tailscale, errors, backup status, and manual upgrade checks
 ---
 
 # VPS Audit
 
-Run a full health audit of the Hetzner VPS across 7 sequential phases, then offer to fix each issue found.
+Run a full health audit of the VPS across 7 sequential phases, then offer to fix each issue found.
 
 **Execution:** Always via `ssh vps "..."` — never local commands
 
@@ -163,15 +163,15 @@ For each CRITICAL/WARN finding, propose the fix and ask for confirmation before 
 
 | Finding | Proposed Fix |
 |-|-|
-| Container not running (networking/rollhook) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d <name>"` |
-| Container not running (infra) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.infra.yml up -d <name>"` |
-| Container not running (monitoring) | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.monitoring.yml up -d <name>"` |
+| Container not running (networking/rollhook) | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d <name>"` |
+| Container not running (infra) | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.infra.yml up -d <name>"` |
+| Container not running (monitoring) | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.monitoring.yml up -d <name>"` |
 | Container restart count >3 | Show `docker logs <name> --tail=20`, offer restart via appropriate stack |
-| Cloudflared errors | `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d --force-recreate cloudflared"` |
+| Cloudflared errors | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d --force-recreate cloudflared"` |
 | Tailscale down | `ssh vps "sudo systemctl restart tailscaled"` |
 | Docker image bloat | `ssh vps "docker image prune -f"` (dangling only — safe) |
 | Disk >95% | Report + offer `docker image prune -f` — confirm before running; do NOT auto-run `system prune` |
-| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/hetzner-vps && doppler run --project vps --config prod -- ./scripts/backup-pg.sh"` |
+| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/vps && doppler run --project vps --config prod -- ./scripts/backup-pg.sh"` |
 | Postgres upgrade available | See "Upgrade Procedures" in CLAUDE.md — backup first, then pull + recreate |
 | Valkey upgrade available | See "Upgrade Procedures" in CLAUDE.md — pull + recreate (data in volume) |
 

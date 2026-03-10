@@ -1,6 +1,6 @@
-# hetzner-vps
+# vps
 
-Infrastructure-as-code for a Hetzner CX33 VPS (4 vCPU · 8 GB · 80 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking (incl. RollHook), infra (databases), and monitoring.
+Infrastructure-as-code for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking (incl. RollHook), infra (databases), and monitoring.
 
 ---
 
@@ -24,14 +24,14 @@ make postgres-setup      # idempotent schema/user provisioning (run before make 
 make ps                  # docker ps with name/status/ports
 make shell-postgres      # psql shell
 make backup              # manual pg_dump → S3
-make firewall            # reapply Hetzner Cloud Firewall via hcloud CLI
+make firewall            # show UFW status and rules
 
 # Local dev
 make dev-up              # Postgres + Valkey with ports exposed, no Doppler
 make dev-down
 
 # Deploy config changes to server
-git push && ssh vps "cd ~/hetzner-vps && git pull"
+git push && ssh vps "cd ~/vps && git pull"
 ```
 
 > **Note:** `vps` was originally IPv6-only (GitHub unreachable). A public IPv4 was added — git now works normally. SSH access remains via Tailscale only (sshd bound to Tailscale interface).
@@ -80,7 +80,7 @@ Key variables:
 
 ## Object Storage — Bucket Layout
 
-Hetzner Object Storage, bucket `jkrumm` (`fsn1`). All paths are prefixed to avoid collisions across sources:
+S3-compatible object storage, bucket `jkrumm`. All paths are prefixed to avoid collisions across sources:
 
 ```
 jkrumm/
@@ -152,7 +152,7 @@ scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docke
 scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
-scripts/firewall.sh           hcloud CLI firewall rules — IaC for Hetzner Cloud Firewall
+scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
 cron/pg-backup                Dropped into /etc/cron.d/ — runs backup at 03:00 daily
 README.md → Secrets           All Doppler variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
@@ -170,7 +170,7 @@ Makefile                      Operational shortcuts
 
 **Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Pushover via shoutrrr at warn level (failures only). Runs daily at 04:00.
 
-**OTel Collector** — ports `4317` (gRPC) and `4318` (HTTP) bound to all interfaces. Apps on `monitoring-net` reach it by hostname. Protected from public internet by Hetzner Firewall + UFW.
+**OTel Collector** — ports `4317` (gRPC) and `4318` (HTTP) bound to all interfaces. Apps on `monitoring-net` reach it by hostname. Protected from public internet by UFW + provider firewall.
 
 **Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
 
@@ -267,8 +267,8 @@ See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patte
 Never violate these:
 
 - No `ports:` for any service except OTel (4317/4318 Tailscale-reachable) and monitoring agents
-- Zero inbound ports on Hetzner Firewall — cloudflared is outbound-only, SSH via Tailscale only
-- No SSH rule in Hetzner Cloud Firewall (`scripts/firewall.sh`)
+- Zero inbound ports — cloudflared is outbound-only, SSH via Tailscale only
+- Provider firewall: zero inbound rules (configured via hosting panel)
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
 - Postgres and Valkey: no auto-update via Watchtower — manual only
@@ -282,7 +282,7 @@ Never violate these:
 3. Set `ListenAddress` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
 4. `doppler login && doppler setup`
 5. Cloudflare dashboard → Zero Trust → Tunnels → Create tunnel → copy token to Doppler as `CLOUDFLARE_TUNNEL_TOKEN`
-6. `make firewall` → assign firewall to server in hcloud dashboard (zero inbound rules)
+6. Configure zero-inbound firewall rules in hosting panel
 7. `make up`
 10. Cloudflare dashboard → tunnel → Public Hostnames → add `*.DOMAIN` → `https://traefik:443` (TLS verify: off)
 
