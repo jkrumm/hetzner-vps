@@ -279,14 +279,21 @@ Never violate these:
 
 ## Deployment Order (fresh server)
 
-1. `bash setup.sh` (as root)
-2. `sudo tailscale up`
-3. Set `ListenAddress` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
-4. `doppler login && doppler setup`
-5. Cloudflare dashboard → Zero Trust → Tunnels → Create tunnel → copy token to Doppler as `CLOUDFLARE_TUNNEL_TOKEN`
-6. Configure zero-inbound firewall rules in hosting panel
-7. `make up`
-10. Cloudflare dashboard → tunnel → Public Hostnames → add `*.DOMAIN` → `https://traefik:443` (TLS verify: off)
+```bash
+git clone https://github.com/jkrumm/vps /home/jkrumm/vps
+bash /home/jkrumm/vps/scripts/setup.sh
+```
+
+1. `tailscale up` → complete browser auth → note Tailscale IP
+2. `doppler configure set token <service-token> --scope /home/jkrumm/vps` (create token at dashboard.doppler.com)
+3. Uncomment `ListenAddress <tailscale-ip>` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
+4. `tailscale set --ssh --accept-risk=lose-ssh` → enables SSH badge in Tailscale admin
+5. Cloudflare dashboard → Zero Trust → Tunnels → reuse or create tunnel → set `CLOUDFLARE_TUNNEL_TOKEN` in Doppler
+6. `cd ~/vps && make up`
+7. `make postgres-setup` → then start any app needing Postgres
+8. `reboot` → verify kernel updated, all containers restart automatically
+
+**Note:** HostingFuchs has no panel firewall — UFW + sshd Tailscale binding is sufficient.
 
 ---
 
