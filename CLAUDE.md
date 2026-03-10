@@ -36,7 +36,7 @@ make dev-down
 git push && ssh vps "cd ~/vps && git pull"
 ```
 
-> **Note:** `vps` was originally IPv6-only (GitHub unreachable). A public IPv4 was added — git now works normally. SSH access remains via Tailscale only (sshd bound to Tailscale interface).
+> **SSH:** Tailscale only — sshd binds to Tailscale interface, not the public IP. `ssh vps` uses the Tailscale IP from `~/.ssh/config`.
 
 ---
 

@@ -110,11 +110,11 @@ Docker API access — no direct docker.sock mounts:
 
 ## Design Decisions
 
-**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. Provider firewall has zero inbound rules. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.<DOMAIN>`) — required so cloudflared can verify the TLS handshake with Traefik internally.
+**Cloudflare Tunnel, zero inbound ports.** cloudflared makes outbound connections to Cloudflare edge only. No ports 80/443 exposed on the host. DNS-01 ACME still issues a wildcard cert (`*.<DOMAIN>`) — required so cloudflared can verify the TLS handshake with Traefik internally.
 
 **Four socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. RollHook and Watchtower each get a dedicated proxy with POST=1 on isolated networks — write access never shared between them.
 
-**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only. Port 22 is absent from both the provider firewall and UFW. Zero SSH attack surface from the public internet.
+**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only — nothing listens on port 22 of the public IP. UFW blocks all remaining public inbound. Zero SSH attack surface from the internet.
 
 **Watchtower over WUD.** Auto-updates all containers except Postgres and Valkey (opted out via label). Pushover notifications at warn level (failures only — not every update). Postgres and Valkey are excluded: major version bumps can have data format implications, updates must be deliberate with a backup first.
 
@@ -122,7 +122,7 @@ Docker API access — no direct docker.sock mounts:
 
 **Doppler for secrets.** All sensitive values in Doppler project `vps`, config `prod`. Zero secrets in the repo — no `.env` or `.env.example`. Variable names and setup instructions documented in the Secrets section below. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
 
-**No Terraform.** Single-server setup doesn't justify state management overhead. UFW handles firewall rules; provider-level firewall configured manually via hosting panel.
+**No Terraform.** Single-server setup doesn't justify state management overhead. UFW is the only firewall layer — the hosting provider has no panel firewall. This is sufficient given sshd binds to Tailscale only and cloudflared is outbound-only.
 
 ---
 
