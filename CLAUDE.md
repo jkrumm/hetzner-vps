@@ -241,7 +241,7 @@ services:
 
 ## RollHook — Zero-Downtime Deployments
 
-RollHook (port 7700, behind Traefik, publicly accessible via Cloudflare at `rollhook-vps.<DOMAIN>`) receives webhook calls from GitHub Actions to trigger rolling deployments. It pulls the new image and scales one container at a time, waiting for healthchecks before removing the old instance.
+RollHook (port 7700, behind Traefik, publicly accessible via Cloudflare at `rollhook.<DOMAIN>`) receives webhook calls from GitHub Actions to trigger rolling deployments. It pulls the new image and scales one container at a time, waiting for healthchecks before removing the old instance.
 
 ### Hard constraints for RollHook-managed apps
 
