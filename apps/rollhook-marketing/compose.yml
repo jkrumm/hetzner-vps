@@ -14,7 +14,7 @@ networks:
 
 services:
   rollhook-marketing:
-    image: ${IMAGE_TAG:-registry.jkrumm.com/private/rollhook-marketing:latest}
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/rollhook-marketing:latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -40,6 +40,8 @@ services:
       - "traefik.http.services.rollhook-marketing.loadbalancer.healthcheck.interval=5s"
       # Managed by RollHook — watchtower must not interfere with rolling deployments
       - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys
+      - "rollhook.allowed_repos=jkrumm/rollhook"
       # www → canonical redirect (301 permanent)
       - "traefik.http.routers.rollhook-marketing-www.rule=Host(`www.rollhook.com`)"
       - "traefik.http.routers.rollhook-marketing-www.entrypoints=websecure"

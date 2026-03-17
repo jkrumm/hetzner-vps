@@ -144,7 +144,7 @@ services:
   # Add one volume per app:  - /home/jkrumm/<app>:/home/jkrumm/<app>:ro
   # ---------------------------------------------------------------------------
   rollhook:
-    image: registry.jkrumm.com/rollhook:latest
+    image: ghcr.io/jkrumm/rollhook:latest
     container_name: rollhook
     restart: unless-stopped
     depends_on:
@@ -152,19 +152,17 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      ADMIN_TOKEN: ${ROLLHOOK_ADMIN_TOKEN}
-      WEBHOOK_TOKEN: ${ROLLHOOK_WEBHOOK_TOKEN}
+      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
+      ROLLHOOK_URL: https://rollhook.jkrumm.com
       PORT: "7700"
       DOCKER_HOST: tcp://socket-proxy-rollhook:2375
     volumes:
       - rollhook-data:/app/data
-      # Docker registry credentials — required for pulling from private registry
-      - /home/jkrumm/.docker/config.json:/root/.docker/config.json:ro
-      # Mount app compose dirs — docker-rollout reads compose.yml from inside the container
-      - /home/jkrumm/vps/apps/rollhook-marketing:/home/jkrumm/vps/apps/rollhook-marketing
+      # Mount all app compose dirs — RollHook reads compose.yml from inside the container
+      - /home/jkrumm/vps/apps:/home/jkrumm/vps/apps
 
     healthcheck:
-      test: [CMD, bun, -e, "fetch('http://localhost:7700/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/health"]
       interval: 10s
       timeout: 5s
       start_period: 10s
