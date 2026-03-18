@@ -34,6 +34,7 @@ services:
       VERSION: 1
       CONTAINERS: 1
       IMAGES: 1
+      NETWORKS: 1   # required for Watchtower to connect recreated containers to their networks
       POST: 1       # write access — required for Watchtower to pull and recreate containers
       DELETE: 1     # required for Watchtower to remove old containers before recreating
     volumes:
