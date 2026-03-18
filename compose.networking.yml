@@ -11,11 +11,41 @@ networks:
   socket-proxy-rollhook-net:
     driver: bridge
     internal: true
+  socket-proxy-claude-net:
+    driver: bridge
+    internal: false
 
 volumes:
   rollhook-data:
 
 services:
+
+  # ---------------------------------------------------------------------------
+  # Docker socket proxy for claude-remote API — read-only monitoring access.
+  # Bound to Tailscale interface only; reached from homelab over Tailscale VPN.
+  # Grants: container list, stats, logs, host info. No write operations.
+  # ---------------------------------------------------------------------------
+  socket-proxy-claude:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy-claude
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: 1
+      STATS: 1
+      LOGS: 1
+      INFO: 1
+      POST: 0
+    ports:
+      - "${VPS_TAILSCALE_IP}:2376:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy-claude-net
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
   # Docker socket proxy — restricts Docker API access to read-only operations.
