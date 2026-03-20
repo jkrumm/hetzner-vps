@@ -180,7 +180,7 @@ services:
       - monitoring-net
       - socket-proxy-monitoring-net
     ports:
-      - "7007:7007"   # Agent port, accessible via Tailscale only
+      - "100.82.157.104:7007:7007"   # Tailscale only
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
