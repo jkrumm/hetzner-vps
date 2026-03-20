@@ -146,8 +146,8 @@ Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker
 ### 3. Tailscale
 
 ```bash
-sudo tailscale up   # complete auth in browser
-tailscale ip -4     # note the assigned Tailscale IP (100.x.x.x)
+sudo tailscale up --ssh --advertise-tags=tag:vps   # complete auth in browser
+tailscale ip -4                                     # note the assigned Tailscale IP (100.x.x.x)
 ```
 
 Then bind sshd to the Tailscale interface:
@@ -158,12 +158,16 @@ sudo systemctl restart ssh
 # ⚠ Open a second SSH session via Tailscale IP to verify before closing this one
 ```
 
+`--ssh` enables Tailscale SSH — identity-based auth via your Tailscale account, no SSH keys required once active. The `authorized_keys` populated by `setup.sh` is only needed for this bootstrap window.
+
 Add the server to your local `~/.ssh/config`:
 ```
 Host vps
     HostName <tailscale-ip>
     User jkrumm
 ```
+
+SSH agent is handled globally via 1Password (`IdentityAgent` in `~/.ssh/config`).
 
 ### 4. Doppler
 
