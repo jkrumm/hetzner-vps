@@ -14,6 +14,7 @@ services:
 
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: umami
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
