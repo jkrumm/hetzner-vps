@@ -51,6 +51,39 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA umami GRANT ALL ON SEQUENCES TO umami;
 SQL
 
 # ---------------------------------------------------------------------------
+# Watchtower — schema: watchtower, user: watchtower
+# ---------------------------------------------------------------------------
+echo "--> watchtower"
+
+psql_main <<SQL
+-- Create schema if not exists
+CREATE SCHEMA IF NOT EXISTS watchtower;
+
+-- Create role if not exists, always sync password (for Doppler rotations)
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'watchtower') THEN
+    CREATE ROLE watchtower WITH LOGIN PASSWORD '${WATCHTOWER_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE watchtower WITH PASSWORD '${WATCHTOWER_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+-- Grant database connect
+GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO watchtower;
+
+-- Grant schema access (no access to public schema)
+GRANT USAGE, CREATE ON SCHEMA watchtower TO watchtower;
+
+-- Grants on existing + future objects in watchtower schema
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA watchtower TO watchtower;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA watchtower TO watchtower;
+ALTER DEFAULT PRIVILEGES IN SCHEMA watchtower GRANT ALL ON TABLES TO watchtower;
+ALTER DEFAULT PRIVILEGES IN SCHEMA watchtower GRANT ALL ON SEQUENCES TO watchtower;
+SQL
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern
 # ---------------------------------------------------------------------------
 
