@@ -8,29 +8,28 @@ Infrastructure-as-code for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubuntu 24.04
 
 ## Quick Reference
 
-```bash
-# Primary operations
-make up                  # start all stacks in order (networking → infra → umami → monitoring)
-make down                # stop all stacks in reverse order
+Environment is controlled by `.env` (gitignored). Locally: `ENV=dev`. On server: `ENV=prod`.
+Doppler config: `vps/prod` (server) or `vps/dev` (local, passwords only overridden).
 
-# Targeted restart (one stack)
+```bash
+# Primary operations — adapts to ENV automatically
+make up                  # dev: compose.dev.yml | prod: networking → infra → umami → monitoring
+make down                # dev: compose.dev.yml | prod: reverse order
+
+# Targeted restart (prod only — individual stacks)
 make networking-up / make networking-down
 make infra-up    / make infra-down
 make umami-up / make umami-down
 make monitoring-up / make monitoring-down
 
-# Postgres schema/user provisioning
-make postgres-setup      # idempotent schema/user provisioning (run before make umami-up)
+# Postgres schema/user provisioning — idempotent, works for both envs
+make postgres-setup      # run after make up (before make umami-up on prod)
 
 # Status + ops
 make ps                  # docker ps with name/status/ports
-make shell-postgres      # psql shell
-make backup              # manual pg_dump → S3
+make shell-postgres      # psql shell (uses correct Doppler config per ENV)
+make backup              # manual pg_dump → S3 (prod only — guarded)
 make firewall            # show UFW status and rules
-
-# Local dev
-make dev-up              # Postgres + Valkey with ports exposed, no Doppler
-make dev-down
 
 # Deploy config changes to server
 git push && ssh vps "cd ~/vps && git pull"

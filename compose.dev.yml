@@ -1,8 +1,8 @@
 ---
 # Local dev infra — Postgres + Valkey with ports exposed for direct app connections.
-# No Doppler, no external networks, no production hardening.
-# Usage: docker compose -f compose.dev.yml up -d
-#        make dev-up / make dev-down
+# Uses Doppler vps/dev config via DOPPLER_RUN in Makefile.
+# Usage: make up (with ENV=dev in .env)
+#        make postgres-setup (provisions schemas/users)
 
 services:
 
@@ -10,15 +10,15 @@ services:
     image: postgres:18
     container_name: postgres
     environment:
-      POSTGRES_DB: dev
-      POSTGRES_USER: dev
-      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev -d dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
