@@ -4,8 +4,6 @@
 # Requires networking + infra stacks to be running first.
 
 networks:
-  postgres-net:
-    external: true
   monitoring-net:
     external: true
   socket-proxy-watchtower-net:
@@ -50,7 +48,7 @@ services:
   # ---------------------------------------------------------------------------
   # Watchtower — auto-updates containers and sends ntfy notifications.
   # Connects to Docker via socket proxy (TCP). Postgres and Valkey excluded.
-  # Stores update history in watchtower schema. Notifications only at warn level.
+  # Notifications only at warn level (failures, not every successful update).
   # ---------------------------------------------------------------------------
   watchtower:
     image: containrrr/watchtower:latest
@@ -62,15 +60,12 @@ services:
       - no-new-privileges:true
     mem_limit: 128m
     networks:
-      - postgres-net
       - socket-proxy-watchtower-net
       - watchtower-egress
     environment:
       # Connect to Docker via proxy (no direct docker.sock mount needed)
       DOCKER_HOST: tcp://socket-proxy-watchtower:2375
       DOCKER_API_VERSION: "1.44"
-      # Database for storing update history
-      DATABASE_URL: "postgresql://watchtower:${WATCHTOWER_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=watchtower"
       # ntfy via shoutrrr — token from Doppler
       WATCHTOWER_NOTIFICATION_URL: "ntfy://:${NTFY_TOKEN}@ntfy.jkrumm.com/vps-watchtower"
       WATCHTOWER_NOTIFICATIONS_LEVEL: warn

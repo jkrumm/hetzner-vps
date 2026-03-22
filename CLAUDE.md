@@ -193,7 +193,6 @@ Current schemas:
 |-|-|-|
 | public | (main app / reserved) | ${POSTGRES_USER} |
 | umami | Umami analytics | umami |
-| watchtower | Watchtower (Docker auto-updater) | watchtower |
 
 ---
 
