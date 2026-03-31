@@ -77,6 +77,35 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA watchdog GRANT ALL ON SEQUENCES TO watchdog;
 SQL
 
 # ---------------------------------------------------------------------------
+# basalt-ui-playground — schema: basalt_ui_playground, user: basalt_ui_playground
+# ---------------------------------------------------------------------------
+echo "--> basalt_ui_playground"
+
+psql_main <<SQL
+CREATE SCHEMA IF NOT EXISTS basalt_ui_playground;
+
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'basalt_ui_playground') THEN
+    CREATE ROLE basalt_ui_playground WITH LOGIN PASSWORD '${BASALT_UI_PLAYGROUND_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE basalt_ui_playground WITH PASSWORD '${BASALT_UI_PLAYGROUND_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO basalt_ui_playground;
+-- Required for drizzle-kit migrate: it runs CREATE SCHEMA IF NOT EXISTS internally,
+-- and PG checks CREATE ON DATABASE before the IF NOT EXISTS short-circuit.
+GRANT CREATE ON DATABASE "${POSTGRES_DB}" TO basalt_ui_playground;
+GRANT USAGE, CREATE ON SCHEMA basalt_ui_playground TO basalt_ui_playground;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA basalt_ui_playground TO basalt_ui_playground;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA basalt_ui_playground TO basalt_ui_playground;
+ALTER DEFAULT PRIVILEGES IN SCHEMA basalt_ui_playground GRANT ALL ON TABLES TO basalt_ui_playground;
+ALTER DEFAULT PRIVILEGES IN SCHEMA basalt_ui_playground GRANT ALL ON SEQUENCES TO basalt_ui_playground;
+SQL
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern
 # ---------------------------------------------------------------------------
 

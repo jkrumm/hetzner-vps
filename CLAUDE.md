@@ -76,6 +76,7 @@ Key variables:
 | `SIGNOZ_OTLP_ENDPOINT` | OTel collector config (`otel/config.yaml`) |
 | `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.umami.yml` |
 | `UMAMI_APP_SECRET` | Umami session secret — 32+ char random string (`openssl rand -hex 32`) |
+| `BASALT_UI_PLAYGROUND_DB_PASSWORD` | basalt-ui-playground Postgres user password — `setup-postgres.sh` |
 
 ---
 
@@ -194,6 +195,7 @@ Current schemas:
 | public | (main app / reserved) | ${POSTGRES_USER} |
 | umami | Umami analytics | umami |
 | watchdog | Watchdog | watchdog |
+| basalt_ui_playground | basalt-ui-playground | basalt_ui_playground |
 
 ---
 
