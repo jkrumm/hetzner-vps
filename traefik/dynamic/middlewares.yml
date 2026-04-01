@@ -27,9 +27,12 @@ http:
         customFrameOptionsValue: "SAMEORIGIN"
 
     # Tailscale-only — restrict access to Tailscale CGNAT range (100.64.0.0/10).
-    # Applied to internal dashboards (Traefik). Tailscale membership IS the auth.
-    # Basic auth intentionally omitted: redundant for a personal tailnet and
-    # dynamic config files don't support ${ENV_VAR} substitution anyway.
+    # NOTE: Ineffective when Traefik sits behind Docker published ports — Docker NAT
+    # rewrites the source IP to the bridge gateway (172.x.x.x), so the check always fails.
+    # Internal dashboards (traefik.DOMAIN, hyperdx.DOMAIN) use DNS-based access control
+    # instead: DNS-only A records → Tailscale IP make them unreachable from public internet.
+    # This middleware is kept as a reference; only use it when Traefik receives real client IPs
+    # (e.g., host network mode or trusted proxy forwarding).
     tailscale-only:
       ipAllowList:
         sourceRange:

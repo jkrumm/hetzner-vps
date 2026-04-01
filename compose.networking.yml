@@ -125,13 +125,14 @@ services:
       - proxy
       - socket-proxy-net
     labels:
-      # Traefik dashboard — restricted to Tailscale IP range via middleware
+      # Traefik dashboard — Tailscale-only via DNS (A record → Tailscale IP, DNS-only/grey cloud).
+      # Docker NAT rewrites source IPs, so ipAllowList is ineffective here.
+      # CGNAT routing (100.x.x.x) is unreachable from public internet — DNS is the access control.
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=tailscale-only@file"
       # Request wildcard cert via DNS-01 — Docker Compose substitutes ${DOMAIN} in labels ✓
       - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
       - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
