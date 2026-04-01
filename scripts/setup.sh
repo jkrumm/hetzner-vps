@@ -260,35 +260,32 @@ else
   curl -fsSL https://tailscale.com/install.sh | sh
 fi
 
-# Doppler CLI — installer downloads from packages.doppler.com (IPv4 only on some CDNs)
-if command -v doppler &>/dev/null; then
-  skip "Doppler already installed ($(doppler --version 2>&1))"
+# 1Password CLI
+if command -v op &>/dev/null; then
+  skip "1Password CLI already installed ($(op --version 2>&1))"
 else
-  log "Installing Doppler CLI..."
-  apt-get install -y -qq apt-transport-https
-  if curl -Ls --max-time 15 https://cli.doppler.com/install.sh | sh; then
-    log "Doppler CLI installed"
-  else
-    warn "Doppler CLI install failed (IPv4-only CDN unreachable from IPv6 host)."
-    warn "Install via apt repo manually, or copy binary from another host:"
-    warn "  scp <other-host>:/usr/bin/doppler /usr/local/bin/doppler"
-  fi
+  log "Installing 1Password CLI..."
+  curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+    gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | \
+    tee /etc/apt/sources.list.d/1password.list
+  apt-get update -qq && apt-get install -y -qq 1password-cli
 fi
 
 # =============================================================================
 # 9. Private registry login (registry.jkrumm.com / Zot)
 # Stores credentials in ~/.docker/config.json — Docker Compose picks them up
 # automatically when pulling images from registry.jkrumm.com.
-# Requires: doppler setup (project: vps, config: prod) completed first.
+# Requires: OP_SERVICE_ACCOUNT_TOKEN set with access to common vault.
 # =============================================================================
-if doppler secrets get ZOT_PASSWORD --plain --project vps --config prod &>/dev/null; then
+if op read "op://common/zot/PASSWORD" &>/dev/null; then
   log "Logging into private registry (registry.jkrumm.com)..."
   su - "${DEPLOY_USER}" -c \
-    "doppler secrets get ZOT_PASSWORD --plain --project vps --config prod \
+    "op read 'op://common/zot/PASSWORD' \
      | docker login registry.jkrumm.com -u jkrumm --password-stdin"
 else
-  warn "ZOT_PASSWORD not in Doppler — skipping private registry login."
-  warn "Run manually after Doppler setup: doppler secrets get ZOT_PASSWORD --plain | docker login registry.jkrumm.com -u jkrumm --password-stdin"
+  warn "ZOT_PASSWORD not accessible in 1Password — skipping private registry login."
+  warn "Ensure OP_SERVICE_ACCOUNT_TOKEN is set and has access to the common vault."
 fi
 
 # =============================================================================
@@ -338,11 +335,9 @@ log " 1. Connect Tailscale:    tailscale up  (already done if you see a TS IP)"
 log " 2. Lock down SSH:        Edit /etc/ssh/sshd_config.d/99-hardening.conf"
 log "                          Uncomment: ListenAddress <tailscale-ip>"
 log "                          Verify Tailscale SSH works, then: systemctl restart sshd"
-log " 3. Login to Doppler:     su - ${DEPLOY_USER}"
-log "                          doppler login && doppler setup"
-log "                          (project: vps, config: prod)"
-log " 4. Cloudflare Tunnel:    Create tunnel in Cloudflare dashboard → Zero Trust → Tunnels"
-log "                          Copy token → Doppler as CLOUDFLARE_TUNNEL_TOKEN"
+log " 3. Set 1Password SA:     Add OP_SERVICE_ACCOUNT_TOKEN to /home/${DEPLOY_USER}/.bashrc"
+log "                          source ~/.bashrc && op vault list (verify access)"
+log " 4. Cloudflare Tunnel:    Token already in 1Password (vps/cloudflare-tunnel)"
 log " 5. UFW status:            ufw status verbose"
 log "                          Configure provider-level firewall (zero inbound) via hosting panel"
 log " 6. Start all stacks:     make up"

@@ -2,14 +2,14 @@
 
 Infrastructure-as-code for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubuntu 24.04) — primary `vps`. Docker Compose only. No Swarm, no Kubernetes. Three compose files by concern: networking (incl. RollHook), infra (databases), and monitoring.
 
-> **Public repo.** Never commit real IPs, hostnames, Tailscale IPs, passwords, tokens, or provider-specific details. Use `<placeholder>` in docs. All actual values in Doppler.
+> **Public repo.** Never commit real IPs, hostnames, Tailscale IPs, passwords, tokens, or provider-specific details. Use `<placeholder>` in docs. All actual values in 1Password.
 
 ---
 
 ## Quick Reference
 
 Environment is controlled by `.env` (gitignored). Locally: `ENV=dev`. On server: `ENV=prod`.
-Doppler config: `vps/prod` (server) or `vps/dev` (local, passwords only overridden).
+Secrets: `op run --env-file=.env.tpl` — 1Password vaults: `vps` + `common`.
 
 ```bash
 # Primary operations — adapts to ENV automatically
@@ -26,7 +26,7 @@ make postgres-setup      # run after make infra-up, before make monitoring-up
 
 # Status + ops
 make ps                  # docker ps with name/status/ports
-make shell-postgres      # psql shell (uses correct Doppler config per ENV)
+make shell-postgres      # psql shell (uses op run with .env.tpl)
 make backup              # manual pg_dump → S3 (prod only — guarded)
 make firewall            # show UFW status and rules
 
@@ -50,7 +50,7 @@ git push && ssh vps "cd ~/vps && git pull"
 
 ## Secrets
 
-Doppler project `vps`, config `prod`. Variable names and setup instructions in README.md → Secrets section.
+1Password vaults: `vps` + `common`. Variable names and setup instructions in README.md → Secrets section.
 
 **Never write actual values in this repo** — use `<placeholder>` format in docs.
 
@@ -68,8 +68,7 @@ Key variables:
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `NTFY_TOKEN` | Watchtower → ntfy (`ntfy.jkrumm.com/vps-watchtower`) via shoutrrr |
-| `ROLLHOOK_ADMIN_TOKEN/WEBHOOK_TOKEN` | RollHook API auth — copy from homelab Doppler |
-| `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — copy from homelab Doppler |
+| `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — in `common` vault |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |
@@ -96,7 +95,7 @@ jkrumm/
         └── documents/      ← future: personal documents / files
 ```
 
-HomeLab backup scripts should write to `backups/homelab/<service>/` using the same `AWS_*` credentials (stored in HomeLab secrets manager, not Doppler `vps`).
+HomeLab backup scripts should write to `backups/homelab/<service>/` using the same `AWS_*` credentials (stored in `common` vault).
 
 ---
 
@@ -159,7 +158,7 @@ scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
 cron/pg-backup                Dropped into /etc/cron.d/ — runs backup at 03:00 daily
-README.md → Secrets           All Doppler variable names with setup instructions (no values in repo)
+README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
 ```
 
@@ -186,7 +185,7 @@ Makefile                      Operational shortcuts
 All apps share one database (`${POSTGRES_DB}`). Each app gets its own schema and a dedicated user with schema-only access. The superuser can JOIN across schemas natively.
 
 Pattern for new apps:
-1. Add `APP_DB_PASSWORD` to Doppler
+1. Add `APP_DB_PASSWORD` to 1Password `vps` vault
 2. Add a setup block to `scripts/setup-postgres.sh` (CREATE SCHEMA + ROLE + GRANTs)
 3. Run `make postgres-setup`
 4. In compose: `DATABASE_URL: postgresql://app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=app`
@@ -260,12 +259,11 @@ RollHook (port 7700, behind Traefik, publicly accessible via Cloudflare at `roll
 
 See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patterns, GitHub Actions step).
 
-### Doppler secrets (when adding RollHook to compose)
+### 1Password secrets (RollHook)
 
-| Variable | Purpose |
+| 1Password Path | Purpose |
 |-|-|
-| `ROLLHOOK_ADMIN_TOKEN` | Admin API — never leave the server |
-| `ROLLHOOK_WEBHOOK_TOKEN` | Deploy webhook — goes into GitHub repo secrets |
+| `vps/rollhook/SECRET` | RollHook webhook authentication |
 
 ---
 
@@ -290,10 +288,10 @@ bash /home/jkrumm/vps/scripts/setup.sh
 ```
 
 1. `tailscale up` → complete browser auth → note Tailscale IP
-2. `doppler configure set token <service-token> --scope /home/jkrumm/vps` (create token at dashboard.doppler.com)
+2. Add `OP_SERVICE_ACCOUNT_TOKEN` to `~/.bashrc` → `source ~/.bashrc && op vault list`
 3. Uncomment `ListenAddress <tailscale-ip>` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
 4. `tailscale set --ssh --accept-risk=lose-ssh` → enables SSH badge in Tailscale admin
-5. Cloudflare dashboard → Zero Trust → Tunnels → reuse or create tunnel → set `CLOUDFLARE_TUNNEL_TOKEN` in Doppler
+5. Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`)
 6. `cd ~/vps && make up`
 7. `make postgres-setup` → then start any app needing Postgres
 8. `reboot` → verify kernel updated, all containers restart automatically
@@ -307,8 +305,8 @@ bash /home/jkrumm/vps/scripts/setup.sh
 **Patch/minor (same major):**
 ```bash
 make backup
-doppler run -- docker compose -f compose.infra.yml pull <service>
-doppler run -- docker compose -f compose.infra.yml up -d <service>
+op run --env-file=.env.tpl -- docker compose -f compose.infra.yml pull <service>
+op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d <service>
 ```
 
 **Postgres major version (e.g., 18 → 19):**

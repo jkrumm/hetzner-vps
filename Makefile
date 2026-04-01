@@ -3,11 +3,7 @@ export
 
 ENV ?= dev
 
-ifeq ($(ENV),prod)
-DOPPLER_RUN = doppler run --
-else
-DOPPLER_RUN = doppler run -p vps -c dev --
-endif
+OP_RUN = op run --env-file=.env.tpl --
 
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
         postgres-setup ps backup firewall shell-postgres
@@ -19,7 +15,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) infra-up
 	$(MAKE) monitoring-up
 else
-	$(DOPPLER_RUN) docker compose -f compose.dev.yml up -d
+	$(OP_RUN) docker compose -f compose.dev.yml up -d
 endif
 
 down:
@@ -28,20 +24,20 @@ ifeq ($(ENV),prod)
 	$(MAKE) infra-down
 	$(MAKE) networking-down
 else
-	$(DOPPLER_RUN) docker compose -f compose.dev.yml down
+	$(OP_RUN) docker compose -f compose.dev.yml down
 endif
 
 ## Individual prod stacks — targeted restarts
-networking-up:   ; doppler run -- docker compose -f compose.networking.yml up -d
-networking-down: ; doppler run -- docker compose -f compose.networking.yml down
-infra-up:        ; doppler run -- docker compose -f compose.infra.yml up -d
-infra-down:      ; doppler run -- docker compose -f compose.infra.yml down
-monitoring-up:   ; doppler run -- docker compose -f compose.monitoring.yml up -d
-monitoring-down: ; doppler run -- docker compose -f compose.monitoring.yml down
+networking-up:   ; $(OP_RUN) docker compose -f compose.networking.yml up -d
+networking-down: ; $(OP_RUN) docker compose -f compose.networking.yml down
+infra-up:        ; $(OP_RUN) docker compose -f compose.infra.yml up -d
+infra-down:      ; $(OP_RUN) docker compose -f compose.infra.yml down
+monitoring-up:   ; $(OP_RUN) docker compose -f compose.monitoring.yml up -d
+monitoring-down: ; $(OP_RUN) docker compose -f compose.monitoring.yml down
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:
-	$(DOPPLER_RUN) ./scripts/setup-postgres.sh
+	$(OP_RUN) ./scripts/setup-postgres.sh
 
 ## Status / ops
 ps:
@@ -50,10 +46,10 @@ ps:
 ## Prod-only — guarded against accidental dev runs
 backup:
 	@[ "$(ENV)" = "prod" ] || { echo "ERROR: backup requires ENV=prod"; exit 1; }
-	doppler run -- ./scripts/backup-pg.sh
+	$(OP_RUN) ./scripts/backup-pg.sh
 
 firewall:
 	./scripts/firewall.sh
 
 shell-postgres:
-	$(DOPPLER_RUN) docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+	$(OP_RUN) docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}

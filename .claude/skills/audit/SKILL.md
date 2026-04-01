@@ -87,7 +87,7 @@ ssh vps "for svc in traefik cloudflared clickstack; do echo \"=== \$svc ===\"; d
 List recent S3 backups to verify the daily cron ran:
 
 ```bash
-ssh vps "doppler run --project vps --config prod -- aws s3 ls \${AWS_S3_BUCKET}/backups/ --endpoint-url \${AWS_S3_ENDPOINT} | tail -5"
+ssh vps "op run --env-file=.env.tpl -- aws s3 ls \${AWS_S3_BUCKET}/backups/ --endpoint-url \${AWS_S3_ENDPOINT} | tail -5"
 ```
 
 **Thresholds:**
@@ -163,15 +163,15 @@ For each CRITICAL/WARN finding, propose the fix and ask for confirmation before 
 
 | Finding | Proposed Fix |
 |-|-|
-| Container not running (networking/rollhook) | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d <name>"` |
-| Container not running (infra) | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.infra.yml up -d <name>"` |
-| Container not running (monitoring) | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.monitoring.yml up -d <name>"` |
+| Container not running (networking/rollhook) | `ssh vps "cd ~/vps && op run --env-file=.env.tpl -- docker compose -f compose.networking.yml up -d <name>"` |
+| Container not running (infra) | `ssh vps "cd ~/vps && op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d <name>"` |
+| Container not running (monitoring) | `ssh vps "cd ~/vps && op run --env-file=.env.tpl -- docker compose -f compose.monitoring.yml up -d <name>"` |
 | Container restart count >3 | Show `docker logs <name> --tail=20`, offer restart via appropriate stack |
-| Cloudflared errors | `ssh vps "cd ~/vps && doppler run --project vps --config prod -- docker compose -f compose.networking.yml up -d --force-recreate cloudflared"` |
+| Cloudflared errors | `ssh vps "cd ~/vps && op run --env-file=.env.tpl -- docker compose -f compose.networking.yml up -d --force-recreate cloudflared"` |
 | Tailscale down | `ssh vps "sudo systemctl restart tailscaled"` |
 | Docker image bloat | `ssh vps "docker image prune -f"` (dangling only — safe) |
 | Disk >95% | Report + offer `docker image prune -f` — confirm before running; do NOT auto-run `system prune` |
-| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/vps && doppler run --project vps --config prod -- ./scripts/backup-pg.sh"` |
+| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/vps && op run --env-file=.env.tpl -- ./scripts/backup-pg.sh"` |
 | Postgres upgrade available | See "Upgrade Procedures" in CLAUDE.md — backup first, then pull + recreate |
 | Valkey upgrade available | See "Upgrade Procedures" in CLAUDE.md — pull + recreate (data in volume) |
 

@@ -1,7 +1,7 @@
 # PostgreSQL daily backup — 3:00 AM
-# Runs as deploy user with Doppler-injected environment.
+# Runs as deploy user with 1Password-injected environment.
 # Install: cp cron/pg-backup /etc/cron.d/pg-backup && chmod 644 /etc/cron.d/pg-backup
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 3 * * * jkrumm cd /home/jkrumm/vps && doppler run --project vps --config prod -- /home/jkrumm/vps/scripts/backup-pg.sh >> /home/jkrumm/pg-backup.log 2>&1
+0 3 * * * jkrumm cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/scripts/backup-pg.sh >> /home/jkrumm/pg-backup.log 2>&1

@@ -5,7 +5,7 @@
 # On success: pings Uptime Kuma push monitor.
 # On failure: sends down status to Uptime Kuma + exits non-zero.
 #
-# Required env vars (from Doppler):
+# Required env vars (from 1Password via .env.tpl):
 #   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 #   AWS_S3_BUCKET, AWS_S3_ENDPOINT

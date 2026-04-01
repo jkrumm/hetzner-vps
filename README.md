@@ -121,7 +121,7 @@ Docker API access — no direct docker.sock mounts:
 
 **`container_name: redis` for Valkey.** Every app references `redis:6379` without modification.
 
-**Doppler for secrets.** All sensitive values in Doppler project `vps`, config `prod`. Zero secrets in the repo — no `.env` or `.env.example`. Variable names and setup instructions documented in the Secrets section below. Deploy always with `doppler run -- docker compose up -d` (or `make up`).
+**1Password for secrets.** All sensitive values in 1Password vaults `vps` + `common`. Zero secrets in the repo — `.env.tpl` contains only `op://` references. Variable names and setup instructions documented in the Secrets section below. Deploy always with `op run --env-file=.env.tpl -- docker compose up -d` (or `make up`).
 
 **No Terraform.** Single-server setup doesn't justify state management overhead. UFW is the only firewall layer — the hosting provider has no panel firewall. This is sufficient given sshd binds to Tailscale only and cloudflared is outbound-only.
 
@@ -142,7 +142,7 @@ git clone https://github.com/jkrumm/vps /home/jkrumm/vps
 bash /home/jkrumm/vps/scripts/setup.sh
 ```
 
-Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, Doppler, Tailscale), creates external Docker networks, drops cron job for Postgres backups.
+Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker + toolchain (awscli, 1Password CLI, Tailscale), creates external Docker networks, drops cron job for Postgres backups.
 
 ### 3. Tailscale
 
@@ -170,25 +170,22 @@ Host vps
 
 SSH agent is handled globally via 1Password (`IdentityAgent` in `~/.ssh/config`).
 
-### 4. Doppler
+### 4. 1Password CLI
 
 ```bash
-# On server as jkrumm:
-doppler login
-doppler setup   # select project: vps, config: prod
+# Add to ~/.bashrc as jkrumm:
+export OP_SERVICE_ACCOUNT_TOKEN="<token>"
+source ~/.bashrc
+op vault list   # verify access to vps + common vaults
 ```
 
-Create the Doppler project first at [dashboard.doppler.com](https://dashboard.doppler.com) if it doesn't exist.
+### 5. Verify secrets
 
-### 5. Populate Doppler secrets
-
-See the **Secrets** section below for each variable and how to obtain it. All must be set before `make up`.
+All secrets are pre-populated in 1Password (`vps` + `common` vaults). See the **Secrets** section below.
 
 ### 6. Cloudflare Tunnel
 
-1. [Cloudflare dashboard](https://dash.cloudflare.com) → Zero Trust → Networks → Tunnels → **Create tunnel**
-2. Name it (e.g. `vps`), copy the tunnel token
-3. Set in Doppler: `CLOUDFLARE_TUNNEL_TOKEN=<token>`
+Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`). The `.env.tpl` references it automatically.
 
 ### 7. Provider Firewall
 
@@ -206,7 +203,7 @@ Verify: `make ps` — all containers should be running within ~30 seconds.
 
 ### 9. Cloudflare tunnel ingress + DNS
 
-Use the `/cloudflare` Claude Code skill to set the wildcard ingress rule and add DNS records. The skill handles all API calls via `ssh vps "doppler run --"` — the token never leaves Doppler.
+Use the `/cloudflare` Claude Code skill to set the wildcard ingress rule and add DNS records. The skill handles all API calls via `ssh vps "op run --env-file=.env.tpl --"` — the token never leaves 1Password.
 
 - Set wildcard ingress: `*.DOMAIN → https://traefik:443` (once after provisioning)
 - Add DNS record per app subdomain (CNAME → tunnel)
@@ -219,7 +216,7 @@ Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 m
 
 ## Secrets
 
-Doppler project `vps`, config `prod`. No `.env` file — Doppler is the only secrets store.
+1Password vaults: `vps` + `common`. No `.env` file with real values — `.env.tpl` contains only `op://` references.
 
 **Domain + TLS**
 
@@ -262,7 +259,7 @@ Apps create their own users and databases on top of this superuser.
 
 | Variable | Value | How to get |
 |-|-|-|
-| `NTFY_TOKEN` | `tk_xxx` | `docker exec ntfy ntfy token list jkrumm` on HomeLab, or from Doppler `homelab/prod` |
+| `NTFY_TOKEN` | `tk_xxx` | `docker exec ntfy ntfy token list jkrumm` on HomeLab, or `op read "op://common/ntfy/TOKEN"` |
 
 **Monitoring**
 
@@ -275,9 +272,8 @@ Apps create their own users and databases on top of this superuser.
 
 | Variable | Value | How to get |
 |-|-|-|
-| `ROLLHOOK_ADMIN_TOKEN` | `<generated>` | Copy from homelab Doppler — shared token |
-| `ROLLHOOK_WEBHOOK_TOKEN` | `<generated>` | Copy from homelab Doppler — shared token |
-| `ZOT_PASSWORD` | `<generated>` | Copy from homelab Doppler — used for `docker login registry.jkrumm.com` |
+| `ROLLHOOK_SECRET` | `<generated>` | In 1Password: `vps/rollhook/SECRET` |
+| `ZOT_PASSWORD` | `<generated>` | In 1Password: `common/zot/PASSWORD` — used for `docker login registry.jkrumm.com` |
 
 ---
 
@@ -325,7 +321,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4318
 ```
 
-Deploy: `doppler run -- docker compose up -d`
+Deploy: `op run --env-file=.env.tpl -- docker compose up -d`
 
 See `CLAUDE.md` → RollHook section for zero-downtime deployment constraints.
 
@@ -343,7 +339,7 @@ Daily cron at 03:00 via `/etc/cron.d/pg-backup`. Triggers `scripts/backup-pg.sh`
 make backup                                                    # manual trigger
 
 BACKUP_FILE=postgres_mydb_20260224_030000.dump \
-  doppler run -- ./scripts/restore-pg.sh                      # restore (drops + recreates DB)
+  op run --env-file=.env.tpl -- ./scripts/restore-pg.sh                      # restore (drops + recreates DB)
 ```
 
 ---
@@ -355,8 +351,8 @@ Both are excluded from Watchtower auto-updates. Apply manually.
 **Patch/minor (same major):**
 ```bash
 make backup
-doppler run -- docker compose -f compose.infra.yml pull postgres   # or valkey
-doppler run -- docker compose -f compose.infra.yml up -d postgres
+op run --env-file=.env.tpl -- docker compose -f compose.infra.yml pull postgres   # or valkey
+op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d postgres
 make shell-postgres   # verify: SELECT version();
 ```
 
@@ -375,7 +371,7 @@ Create a new **PostgreSQL** data source:
 **SSH/SSL tab → Use SSH tunnel:**
 | Field | Value |
 |-|-|
-| Host | `<VPS_TAILSCALE_IP>` (from Doppler: `doppler secrets get VPS_TAILSCALE_IP --project vps --config prod --plain`) |
+| Host | `<VPS_TAILSCALE_IP>` (from 1Password: `op read "op://vps/config/VPS_TAILSCALE_IP"`) |
 | Port | `22` |
 | Username | `jkrumm` |
 | Auth type | Key pair |
@@ -386,9 +382,9 @@ Create a new **PostgreSQL** data source:
 |-|-|
 | Host | `172.19.0.2` (Postgres container IP on Docker bridge — fixed, doesn't change) |
 | Port | `5432` |
-| User | from Doppler: `POSTGRES_USER` |
-| Password | from Doppler: `POSTGRES_PASSWORD` |
-| Database | from Doppler: `POSTGRES_DB` |
+| User | from 1Password: `op read "op://vps/config/POSTGRES_USER"` |
+| Password | from 1Password: `op read "op://vps/postgres/PASSWORD"` |
+| Database | from 1Password: `op read "op://vps/config/POSTGRES_DB"` |
 
 > **Why not `postgres` as host?** DataGrip resolves the DB hostname locally before establishing the tunnel. `postgres` only resolves inside Docker networks, not on the VPS host. Use the container's bridge IP instead.
 
@@ -396,7 +392,7 @@ Create a new **PostgreSQL** data source:
 
 ```bash
 ssh -L 5432:172.19.0.2:5432 vps   # keep open
-psql -h localhost -p 5432 -U $(doppler secrets get POSTGRES_USER --project vps --config prod --plain) postgres
+psql -h localhost -p 5432 -U $(op read "op://vps/config/POSTGRES_USER") postgres
 ```
 
 ---

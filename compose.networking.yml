@@ -1,6 +1,6 @@
 ---
 # Networking/proxy stack — cloudflared, Traefik, socket-proxy, RollHook
-# Deploy: doppler run -- docker compose -f compose.networking.yml up -d
+# Deploy: op run --env-file=.env.tpl -- docker compose -f compose.networking.yml up -d
 
 networks:
   proxy:

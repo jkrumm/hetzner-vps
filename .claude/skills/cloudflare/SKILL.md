@@ -7,7 +7,7 @@ description: Cloudflare API operations for the VPS — DNS records, tunnel ingre
 
 Handle any Cloudflare DNS or tunnel operation for VPS-hosted apps.
 
-**Execution model:** All API calls run on the VPS via `ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'...'"'"''`. The API token (`CF_API_TOKEN`) stays in Doppler — never passed as a CLI argument, never visible to Claude Code, never logged.
+**Execution model:** All API calls run on the VPS via `ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'...'"'"''`. The API token (`CF_API_TOKEN`) stays in 1Password — never passed as a CLI argument, never visible to Claude Code, never logged.
 
 ---
 
@@ -15,7 +15,7 @@ Handle any Cloudflare DNS or tunnel operation for VPS-hosted apps.
 
 ### VPS Tunnel
 
-The VPS has a single Cloudflare Tunnel. Its ID is stored in Doppler as `CF_TUNNEL_ID`.
+The VPS has a single Cloudflare Tunnel. Its ID is stored in 1Password as `CF_TUNNEL_ID`.
 
 **Current tunnel IDs visible in jkrumm.com DNS:**
 - `13f91961-...` — VPS (this server)
@@ -32,7 +32,7 @@ The VPS has a single Cloudflare Tunnel. Its ID is stored in Doppler as `CF_TUNNE
 2. The wildcard ingress rule already routes it to Traefik
 3. Traefik routes based on the `Host()` label on the container
 
-### Doppler Secrets (project: vps, config: prod)
+### 1Password Secrets (project: vps, config: prod)
 
 | Secret | What it is |
 |-|-|
@@ -50,17 +50,17 @@ Domains accessible with this token: `basalt-ui.com`, `jkrumm.com`, `rollhook.com
 
 ## Authentication Pattern
 
-Use single-quote wrapping so `${VARS}` are expanded by the VPS shell after doppler injects them:
+Use single-quote wrapping so `${VARS}` are expanded by the VPS shell after 1Password injects them:
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'
   curl -s "https://api.cloudflare.com/client/v4/zones" \
     -H "Authorization: Bearer ${CF_API_TOKEN}" \
     | python3 -m json.tool
 '"'"''
 ```
 
-**Why:** Double-quote SSH commands cause the local shell to expand `${CF_API_TOKEN}` before it reaches the VPS (producing empty string and an auth error). The `'...' '"'"' '...'` pattern passes the inner string literally to the VPS where doppler has already injected the secrets.
+**Why:** Double-quote SSH commands cause the local shell to expand `${CF_API_TOKEN}` before it reaches the VPS (producing empty string and an auth error). The `'...' '"'"' '...'` pattern passes the inner string literally to the VPS where 1Password has already injected the secrets.
 
 ---
 
@@ -69,25 +69,25 @@ ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'
 ### List all zones
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/zones" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); [print(z[\"name\"],z[\"id\"]) for z in r[\"result\"]] if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/zones" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); [print(z[\"name\"],z[\"id\"]) for z in r[\"result\"]] if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
 ```
 
 ### Check current tunnel ingress config
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); [print(i.get(\"hostname\",\"catch-all\"),\"→\",i[\"service\"]) for i in r[\"result\"][\"config\"][\"ingress\"]] if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); [print(i.get(\"hostname\",\"catch-all\"),\"→\",i[\"service\"]) for i in r[\"result\"][\"config\"][\"ingress\"]] if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
 ```
 
 ### List DNS records for a zone
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records?per_page=100" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); [print(rec[\"type\"],rec[\"name\"],\"→\",rec[\"content\"]) for rec in r[\"result\"]] if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records?per_page=100" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); [print(rec[\"type\"],rec[\"name\"],\"→\",rec[\"content\"]) for rec in r[\"result\"]] if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
 ```
 
 ### Add a DNS CNAME record (new app subdomain on primary domain)
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" --data "{\"type\":\"CNAME\",\"name\":\"SUBDOMAIN\",\"content\":\"${CF_TUNNEL_ID}.cfargotunnel.com\",\"proxied\":true}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK:\",r[\"result\"][\"name\"]) if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" --data "{\"type\":\"CNAME\",\"name\":\"SUBDOMAIN\",\"content\":\"${CF_TUNNEL_ID}.cfargotunnel.com\",\"proxied\":true}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK:\",r[\"result\"][\"name\"]) if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
 ```
 
 Replace `SUBDOMAIN` with the actual subdomain before running.
@@ -97,19 +97,19 @@ Replace `SUBDOMAIN` with the actual subdomain before running.
 First list records to find the ID, then:
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/RECORD_ID" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK\" if r[\"success\"] else r[\"errors\"])"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/RECORD_ID" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK\" if r[\"success\"] else r[\"errors\"])"'"'"''
 ```
 
 ### Look up Zone ID for a secondary domain
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/zones?name=other-domain.com" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin)[\"result\"]; print(r[0][\"id\"],r[0][\"name\"]) if r else print(\"not found\")"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s "https://api.cloudflare.com/client/v4/zones?name=other-domain.com" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin)[\"result\"]; print(r[0][\"id\"],r[0][\"name\"]) if r else print(\"not found\")"'"'"''
 ```
 
 ### Set/update wildcard tunnel ingress rule
 
 ```bash
-ssh vps 'doppler run --project vps --config prod -- bash -c '"'"'curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations" -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" --data "{\"config\":{\"ingress\":[{\"hostname\":\"*.${DOMAIN}\",\"service\":\"https://traefik:443\",\"originRequest\":{\"noTLSVerify\":true}},{\"service\":\"http_status:404\"}]}}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK — version\",r[\"result\"][\"version\"]) if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations" -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" --data "{\"config\":{\"ingress\":[{\"hostname\":\"*.${DOMAIN}\",\"service\":\"https://traefik:443\",\"originRequest\":{\"noTLSVerify\":true}},{\"service\":\"http_status:404\"}]}}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK — version\",r[\"result\"][\"version\"]) if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
 ```
 
 ---

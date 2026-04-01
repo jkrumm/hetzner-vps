@@ -1,6 +1,6 @@
 ---
 # Monitoring stack
-# Deploy: doppler run -- docker compose -f compose.monitoring.yml up -d
+# Deploy: op run --env-file=.env.tpl -- docker compose -f compose.monitoring.yml up -d
 # Requires networking + infra stacks to be running first.
 
 volumes:
@@ -75,7 +75,7 @@ services:
       # Connect to Docker via proxy (no direct docker.sock mount needed)
       DOCKER_HOST: tcp://socket-proxy-watchtower:2375
       DOCKER_API_VERSION: "1.44"
-      # ntfy via shoutrrr — token from Doppler
+      # ntfy via shoutrrr — token from 1Password
       WATCHTOWER_NOTIFICATION_URL: "ntfy://:${NTFY_TOKEN}@ntfy.jkrumm.com/vps-watchtower"
       WATCHTOWER_NOTIFICATIONS_LEVEL: warn
       WATCHTOWER_NO_STARTUP_MESSAGE: "true"

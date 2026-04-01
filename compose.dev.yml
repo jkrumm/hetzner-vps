@@ -1,6 +1,6 @@
 ---
 # Local dev infra — Postgres + Valkey with ports exposed for direct app connections.
-# Uses Doppler vps/dev config via DOPPLER_RUN in Makefile.
+# Uses op run --env-file=.env.tpl via OP_RUN in Makefile.
 # Usage: make up (with ENV=dev in .env)
 #        make postgres-setup (provisions schemas/users)
 

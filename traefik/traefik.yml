@@ -1,5 +1,5 @@
 ## Traefik v3 — Static Configuration
-## Deploy: doppler run -- docker compose up -d
+## Deploy: op run --env-file=.env.tpl -- docker compose up -d
 ##
 ## NOTE: This file does NOT support ${ENV_VAR} substitution.
 ## Domain-specific config (wildcard cert domains, ACME email) is handled via:

@@ -5,7 +5,7 @@ set -euo pipefail
 # Runs against the main Postgres database (${POSTGRES_DB}).
 # Each app gets its own schema and a dedicated user with schema-only access.
 # Run via: make postgres-setup
-# Requires: postgres container running, Doppler secrets in environment.
+# Requires: postgres container running, 1Password secrets in environment via op run.
 
 psql_main() {
   docker exec -i postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" "$@"
@@ -26,7 +26,7 @@ CREATE SCHEMA IF NOT EXISTS umami;
 -- migration's "CREATE EXTENSION IF NOT EXISTS pgcrypto" finds it there
 CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA umami;
 
--- Create role if not exists, always sync password (for Doppler rotations)
+-- Create role if not exists, always sync password (for secret rotations)
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'umami') THEN

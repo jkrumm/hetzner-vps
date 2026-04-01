@@ -1,6 +1,6 @@
 ---
 # Infrastructure stack — Postgres, Valkey
-# Deploy: doppler run -- docker compose -f compose.infra.yml up -d
+# Deploy: op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d
 # Restart with care: backup Postgres first (make backup)
 
 networks:
