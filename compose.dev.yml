@@ -31,6 +31,31 @@ services:
     volumes:
       - valkey-dev-data:/data
 
+  # ---------------------------------------------------------------------------
+  # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
+  # UI: http://hyperdx.local:7707 (configure via localias)
+  # Apps: OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+  # First visit → create admin account (persisted in volume).
+  # ---------------------------------------------------------------------------
+  clickstack:
+    image: clickhouse/clickstack-all-in-one:latest
+    container_name: clickstack
+    ports:
+      - "7707:8080"   # HyperDX UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - clickstack-db:/data/db
+      - clickstack-ch-data:/var/lib/clickhouse
+      - clickstack-ch-logs:/var/log/clickhouse-server
+    environment:
+      HYPERDX_LOG_LEVEL: debug
+      USAGE_STATS_ENABLED: "false"
+      FRONTEND_URL: http://hyperdx.local
+
 volumes:
   postgres-dev-data:
   valkey-dev-data:
+  clickstack-db:
+  clickstack-ch-data:
+  clickstack-ch-logs:

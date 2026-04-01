@@ -3,7 +3,14 @@
 # Deploy: doppler run -- docker compose -f compose.monitoring.yml up -d
 # Requires networking + infra stacks to be running first.
 
+volumes:
+  clickstack-db:
+  clickstack-ch-data:
+  clickstack-ch-logs:
+
 networks:
+  proxy:
+    external: true
   monitoring-net:
     external: true
   socket-proxy-watchtower-net:
@@ -108,27 +115,45 @@ services:
       options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
-  # OpenTelemetry Collector — receives OTLP from apps, forwards to SigNoz
-  # on homelab via Tailscale. Ports accessible on monitoring-net + Tailscale.
+  # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
+  # Replaces standalone OTel Collector + SigNoz. Apps send OTLP to clickstack:4318.
+  # UI accessible via Traefik at clickstack.DOMAIN (Tailscale-only).
+  # Watchtower auto-updates the full stack image.
   # ---------------------------------------------------------------------------
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    container_name: otel-collector
+  clickstack:
+    image: clickhouse/clickstack-all-in-one:latest
+    container_name: clickstack
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    mem_limit: 256m
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
     environment:
-      SIGNOZ_OTLP_ENDPOINT: ${SIGNOZ_OTLP_ENDPOINT}
+      HYPERDX_LOG_LEVEL: info
+      USAGE_STATS_ENABLED: "false"
+      EXPRESS_SESSION_SECRET: ${EXPRESS_SESSION_SECRET}
+      FRONTEND_URL: https://hyperdx.${DOMAIN}
     volumes:
-      - ./otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - clickstack-db:/data/db
+      - clickstack-ch-data:/var/lib/clickhouse
+      - clickstack-ch-logs:/var/log/clickhouse-server
     networks:
       - monitoring-net
-    # Bind to all interfaces so Tailscale IP is reachable for app instrumentation
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - proxy
+    # No host ports — apps reach clickstack:4317/4318 via monitoring-net,
+    # browser SDKs reach otel.DOMAIN via Cloudflare → Traefik.
+    labels:
+      # HyperDX UI — Tailscale-only
+      - "traefik.enable=true"
+      - "traefik.http.routers.clickstack.rule=Host(`hyperdx.${DOMAIN}`)"
+      - "traefik.http.routers.clickstack.entrypoints=websecure"
+      - "traefik.http.routers.clickstack.tls.certresolver=letsencrypt"
+      - "traefik.http.services.clickstack.loadbalancer.server.port=8080"
+      - "traefik.http.routers.clickstack.middlewares=tailscale-only@file"
+      # OTel HTTP — public (browser SDKs, session replay, external instrumentation)
+      - "traefik.http.routers.clickstack-otel.rule=Host(`otel.${DOMAIN}`)"
+      - "traefik.http.routers.clickstack-otel.entrypoints=websecure"
+      - "traefik.http.routers.clickstack-otel.tls.certresolver=letsencrypt"
+      - "traefik.http.services.clickstack-otel.loadbalancer.server.port=4318"
+      - "traefik.http.routers.clickstack-otel.middlewares=rate-limit@file,security-headers@file"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

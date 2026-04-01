@@ -73,7 +73,7 @@ Key variables:
 | `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — copy from homelab Doppler |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
-| `SIGNOZ_OTLP_ENDPOINT` | OTel collector config (`otel/config.yaml`) |
+| `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |
 | `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.umami.yml` |
 | `UMAMI_APP_SECRET` | Umami session secret — 32+ char random string (`openssl rand -hex 32`) |
 | `BASALT_UI_PLAYGROUND_DB_PASSWORD` | basalt-ui-playground Postgres user password — `setup-postgres.sh` |
@@ -110,7 +110,7 @@ External networks (pre-created by `setup.sh`, referenced as `external: true`):
 | `proxy` | Traefik routing | Traefik, all apps |
 | `postgres-net` | Postgres access | Postgres, apps needing DB |
 | `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
-| `monitoring-net` | Observability bus | OTel, Beszel, Dozzle, apps sending OTel |
+| `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, apps sending OTel |
 
 Internal networks (created by Docker Compose, not external):
 
@@ -127,7 +127,9 @@ Internal networks (created by Docker Compose, not external):
 |-|-|
 | Public apps + RollHook | Internet → Cloudflare edge → cloudflared (outbound) → Traefik → service |
 | Traefik dashboard | Same tunnel path, restricted by `tailscale-only` middleware |
-| OTel data from apps | app → otel-collector:4317 → SigNoz on HomeLab via Tailscale |
+| OTel data from apps | app → clickstack:4318 (via monitoring-net) |
+| HyperDX UI | Cloudflare → Traefik → clickstack:8080 (tailscale-only) |
+| OTel from browsers | Cloudflare → Traefik → clickstack:4318 (public, otel.DOMAIN) |
 | Postgres / Valkey | Internal Docker networks only — zero exposure |
 
 **Key gotcha:** `traefik.yml` static config does NOT support `${ENV_VAR}` substitution. Domain-specific config uses two workarounds:
@@ -141,15 +143,14 @@ Internal networks (created by Docker Compose, not external):
 ```
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey)
-compose.monitoring.yml        Monitoring (OTel, Beszel, Dozzle, Watchtower + two socket-proxy instances)
+compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower + two socket-proxy instances)
 compose.umami.yml             Umami analytics (schema: umami in main DB, Watchtower auto-update)
-compose.dev.yml               Local dev (Postgres + Valkey with ports exposed, no Doppler)
+compose.dev.yml               Local dev (Postgres + Valkey + ClickStack with ports exposed)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
 traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
-otel/config.yaml              OTLP receiver → batch processor → SigNoz exporter (Tailscale)
 scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron)
 scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
@@ -172,7 +173,7 @@ Makefile                      Operational shortcuts
 
 **Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Pushover via shoutrrr at warn level (failures only). Runs daily at 04:00.
 
-**OTel Collector** — ports `4317` (gRPC) and `4318` (HTTP) bound to all interfaces. Apps on `monitoring-net` reach it by hostname. Protected from public internet by UFW + provider firewall.
+**ClickStack** — all-in-one observability container (`clickhouse/clickstack-all-in-one`). Bundles ClickHouse, OTel Collector, HyperDX UI, and MongoDB. Apps on `monitoring-net` send OTLP to `clickstack:4318`. HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only via Traefik). OTel HTTP endpoint at `otel.DOMAIN` (public, for browser SDKs/session replay). Watchtower auto-updates. No auth needed for OTel ingestion; UI auth via first-visit account creation (persisted in internal MongoDB). Dev: `http://hyperdx.local:7707`.
 
 **Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
 

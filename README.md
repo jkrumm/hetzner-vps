@@ -37,8 +37,9 @@ make dev-down
 |-|-|-|
 | PostgreSQL | `postgres` | `5432` |
 | Valkey/Redis | `redis` | `6379` |
-| OTel Collector (gRPC) | `otel-collector` | `4317` |
-| OTel Collector (HTTP) | `otel-collector` | `4318` |
+| ClickStack OTel (gRPC) | `clickstack` | `4317` |
+| ClickStack OTel (HTTP) | `clickstack` | `4318` |
+| ClickStack UI (HyperDX) | `clickstack` | `8080` |
 
 **External Docker networks (apps join these):**
 
@@ -71,12 +72,12 @@ Internal networks — never exposed publicly:
   postgres-net  ── postgres:5432
   valkey-net    ── redis:6379          (Valkey 9, hostname aliased to "redis")
   monitoring-net
-    ├─ otel-collector    receives OTLP → forwards to SigNoz on homelab
+    ├─ clickstack        all-in-one observability (ClickHouse + OTel + HyperDX UI)
     ├─ beszel-agent      pushes server + container metrics → Beszel hub
     └─ dozzle            streams container logs → Dozzle hub
 
 Homelab connectivity: Tailscale
-  VPS → SigNoz, Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
+  VPS → Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
   SSH → Tailscale only (sshd ListenAddress bound to tailscale0, port 22 firewalled)
 
 Docker API access — no direct docker.sock mounts:
@@ -99,7 +100,7 @@ Docker API access — no direct docker.sock mounts:
 | rollhook | ghcr.io/jkrumm/rollhook | Zero-downtime rolling deployments via webhook | auto |
 | postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
 | valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
-| otel-collector | otel/opentelemetry-collector-contrib | OTLP pipeline → SigNoz | auto |
+| clickstack | clickhouse/clickstack-all-in-one | Observability — OTel + ClickHouse + HyperDX UI | auto |
 | beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
 | dozzle | amir20/dozzle | Log streaming agent | auto |
 | socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |
@@ -268,7 +269,7 @@ Apps create their own users and databases on top of this superuser.
 | Variable | Value | How to get |
 |-|-|-|
 | `BESZEL_AGENT_KEY` | `ssh-ed25519 AAAA...` | Beszel hub UI → Add System → address `<tailscale-ip>:45876` → copy SSH public key shown |
-| `SIGNOZ_OTLP_ENDPOINT` | `<tailscale-ip>:4317` | Tailscale IP of the homelab running SigNoz |
+| `EXPRESS_SESSION_SECRET` | `<generated>` | Generate: `openssl rand -hex 32` — HyperDX session encryption |
 
 **RollHook**
 
@@ -321,7 +322,7 @@ services:
     environment:
       DATABASE_URL: postgresql://<user>:<pass>@postgres:5432/<db>
       REDIS_URL: redis://redis:6379
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4318
 ```
 
 Deploy: `doppler run -- docker compose up -d`
@@ -437,7 +438,7 @@ All dashboards are Tailscale-only — no public routes.
 |-|-|-|
 | Beszel | homelab Beszel hub | CPU, RAM, disk, network per container |
 | Dozzle | homelab Dozzle hub | Live container logs |
-| SigNoz | homelab SigNoz | Traces, metrics, logs (OTLP) |
+| HyperDX (ClickStack) | `https://hyperdx.<DOMAIN>` (tailscale-only) | Traces, metrics, logs, session replay |
 | Watchtower | Pushover only (warn level) | Container update failures |
 | Traefik | `https://traefik.<DOMAIN>` | Router/service map, cert status |
 
