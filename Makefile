@@ -10,15 +10,13 @@ DOPPLER_RUN = doppler run -p vps -c dev --
 endif
 
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
-        umami-up umami-down postgres-setup \
-        ps backup firewall shell-postgres
+        postgres-setup ps backup firewall shell-postgres
 
 ## All stacks — adapts to ENV (dev: compose.dev.yml, prod: ordered stack sequence)
 up:
 ifeq ($(ENV),prod)
 	$(MAKE) networking-up
 	$(MAKE) infra-up
-	$(MAKE) umami-up
 	$(MAKE) monitoring-up
 else
 	$(DOPPLER_RUN) docker compose -f compose.dev.yml up -d
@@ -27,7 +25,6 @@ endif
 down:
 ifeq ($(ENV),prod)
 	$(MAKE) monitoring-down
-	$(MAKE) umami-down
 	$(MAKE) infra-down
 	$(MAKE) networking-down
 else
@@ -41,8 +38,6 @@ infra-up:        ; doppler run -- docker compose -f compose.infra.yml up -d
 infra-down:      ; doppler run -- docker compose -f compose.infra.yml down
 monitoring-up:   ; doppler run -- docker compose -f compose.monitoring.yml up -d
 monitoring-down: ; doppler run -- docker compose -f compose.monitoring.yml down
-umami-up:        ; doppler run -- docker compose -f compose.umami.yml up -d
-umami-down:      ; doppler run -- docker compose -f compose.umami.yml down
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:

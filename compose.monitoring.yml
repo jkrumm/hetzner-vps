@@ -11,6 +11,8 @@ volumes:
 networks:
   proxy:
     external: true
+  postgres-net:
+    external: true
   monitoring-net:
     external: true
   socket-proxy-watchtower-net:
@@ -144,14 +146,15 @@ services:
     ports:
       - "${VPS_TAILSCALE_IP}:13133:13133"   # OTel health check — Tailscale only
     labels:
-      # HyperDX UI — Tailscale-only
+      # HyperDX UI — Tailscale-only via DNS (A record → Tailscale IP, DNS-only/grey cloud).
+      # Docker NAT rewrites source IPs, so ipAllowList is ineffective here.
+      # CGNAT routing (100.x.x.x) is unreachable from public internet — DNS is the access control.
       - "traefik.enable=true"
       - "traefik.http.routers.clickstack.rule=Host(`hyperdx.${DOMAIN}`)"
       - "traefik.http.routers.clickstack.entrypoints=websecure"
       - "traefik.http.routers.clickstack.tls.certresolver=letsencrypt"
       - "traefik.http.routers.clickstack.service=clickstack"
       - "traefik.http.services.clickstack.loadbalancer.server.port=8080"
-      - "traefik.http.routers.clickstack.middlewares=tailscale-only@file"
       # OTel HTTP — public (browser SDKs, session replay, external instrumentation)
       - "traefik.http.routers.clickstack-otel.rule=Host(`otel.${DOMAIN}`)"
       - "traefik.http.routers.clickstack-otel.entrypoints=websecure"
@@ -214,3 +217,42 @@ services:
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # Umami — privacy-focused web analytics.
+  # Schema: umami (within main Postgres database). Watchtower auto-updates.
+  # ---------------------------------------------------------------------------
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: umami
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      # ?schema=umami tells Prisma to use the umami schema, not public
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=umami
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      TRACKER_SCRIPT_NAME: p.js
+      COLLECT_API_ENDPOINT: /api/p
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.umami.rule=Host(`umami.${DOMAIN}`)"
+      - "traefik.http.routers.umami.entrypoints=websecure"
+      - "traefik.http.routers.umami.tls.certresolver=letsencrypt"
+      - "traefik.http.services.umami.loadbalancer.server.port=3000"
+      - "traefik.http.routers.umami.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.umami.loadbalancer.healthcheck.path=/api/heartbeat"
+      - "traefik.http.services.umami.loadbalancer.healthcheck.interval=5s"
+    networks:
+      - proxy
+      - postgres-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

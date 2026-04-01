@@ -13,17 +13,16 @@ Doppler config: `vps/prod` (server) or `vps/dev` (local, passwords only overridd
 
 ```bash
 # Primary operations — adapts to ENV automatically
-make up                  # dev: compose.dev.yml | prod: networking → infra → umami → monitoring
+make up                  # dev: compose.dev.yml | prod: networking → infra → monitoring
 make down                # dev: compose.dev.yml | prod: reverse order
 
 # Targeted restart (prod only — individual stacks)
 make networking-up / make networking-down
 make infra-up    / make infra-down
-make umami-up / make umami-down
 make monitoring-up / make monitoring-down
 
 # Postgres schema/user provisioning — idempotent, works for both envs
-make postgres-setup      # run after make up (before make umami-up on prod)
+make postgres-setup      # run after make infra-up, before make monitoring-up
 
 # Status + ops
 make ps                  # docker ps with name/status/ports
@@ -74,7 +73,7 @@ Key variables:
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |
-| `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.umami.yml` |
+| `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.monitoring.yml` |
 | `UMAMI_APP_SECRET` | Umami session secret — 32+ char random string (`openssl rand -hex 32`) |
 | `BASALT_UI_PLAYGROUND_DB_PASSWORD` | basalt-ui-playground Postgres user password — `setup-postgres.sh` |
 
@@ -126,15 +125,19 @@ Internal networks (created by Docker Compose, not external):
 | Traffic type | Path |
 |-|-|
 | Public apps + RollHook | Internet → Cloudflare edge → cloudflared (outbound) → Traefik → service |
-| Traefik dashboard | Same tunnel path, restricted by `tailscale-only` middleware |
+| Traefik dashboard | DNS-only A → Tailscale IP → Traefik (CGNAT unreachable from internet) |
 | OTel data from apps | app → clickstack:4318 (via monitoring-net) |
-| HyperDX UI | Cloudflare → Traefik → clickstack:8080 (tailscale-only) |
+| HyperDX UI | DNS-only A → Tailscale IP → Traefik → clickstack:8080 (CGNAT unreachable from internet) |
 | OTel from browsers | Cloudflare → Traefik → clickstack:4318 (public, otel.DOMAIN) |
 | Postgres / Valkey | Internal Docker networks only — zero exposure |
 
-**Key gotcha:** `traefik.yml` static config does NOT support `${ENV_VAR}` substitution. Domain-specific config uses two workarounds:
-- ACME email → `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on the Traefik container
-- Wildcard cert domains → `tls.domains` labels on the dashboard router in `compose.networking.yml` (Docker Compose DOES substitute `${DOMAIN}` in labels)
+**Key gotchas:**
+
+- `traefik.yml` static config does NOT support `${ENV_VAR}` substitution. Domain-specific config uses two workarounds:
+  - ACME email → `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on the Traefik container
+  - Wildcard cert domains → `tls.domains` labels on the dashboard router in `compose.networking.yml` (Docker Compose DOES substitute `${DOMAIN}` in labels)
+
+- **`ipAllowList` (tailscale-only middleware) does NOT work behind Docker published ports.** Docker NAT masquerades the source IP to the bridge gateway (`172.x.x.x`) before it reaches the Traefik container — the real client IP is never visible. The correct pattern for Tailscale-only services is **DNS-based**: set an A record (DNS-only, grey cloud) pointing to the Tailscale IP (`100.x.x.x`). CGNAT addresses are unreachable from the public internet, so the DNS record itself is the access control — no middleware needed.
 
 ---
 
@@ -143,8 +146,7 @@ Internal networks (created by Docker Compose, not external):
 ```
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey)
-compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower + two socket-proxy instances)
-compose.umami.yml             Umami analytics (schema: umami in main DB, Watchtower auto-update)
+compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey + ClickStack with ports exposed)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
