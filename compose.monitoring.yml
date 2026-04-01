@@ -138,8 +138,11 @@ services:
     networks:
       - monitoring-net
       - proxy
-    # No host ports — apps reach clickstack:4317/4318 via monitoring-net,
+    # No host ports for OTel — apps reach clickstack:4317/4318 via monitoring-net,
     # browser SDKs reach otel.DOMAIN via Cloudflare → Traefik.
+    # Health check exposed on Tailscale for Uptime Kuma monitoring.
+    ports:
+      - "${VPS_TAILSCALE_IP}:13133:13133"   # OTel health check — Tailscale only
     labels:
       # HyperDX UI — Tailscale-only
       - "traefik.enable=true"

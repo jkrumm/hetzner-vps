@@ -46,7 +46,7 @@ ssh vps "docker system df"
 **Expected running containers:**
 - Networking: `cloudflared`, `traefik`, `socket-proxy`, `socket-proxy-rollhook`, `rollhook`
 - Infra: `postgres`, `redis`
-- Monitoring: `otel-collector`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`
+- Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`
 
 **Thresholds:**
 - CRITICAL: any expected container not running
@@ -75,7 +75,7 @@ ssh vps "tailscale status"
 ### Phase 5: Recent Errors (Log Scan)
 
 ```bash
-ssh vps "for svc in traefik cloudflared otel-collector; do echo \"=== \$svc ===\"; docker logs \$svc --tail=20 2>&1 | grep -iE 'error|fatal|panic|crash' | tail -5; done && journalctl -p err -n 10 --no-pager 2>/dev/null"
+ssh vps "for svc in traefik cloudflared clickstack; do echo \"=== \$svc ===\"; docker logs \$svc --tail=20 2>&1 | grep -iE 'error|fatal|panic|crash' | tail -5; done && journalctl -p err -n 10 --no-pager 2>/dev/null"
 ```
 
 **Thresholds:**

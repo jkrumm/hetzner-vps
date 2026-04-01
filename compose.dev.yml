@@ -33,7 +33,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
-  # UI: http://hyperdx.local:7707 (configure via localias)
+  # UI: http://hyperdx.local (configure via localias)
   # Apps: OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
   # First visit → create admin account (persisted in volume).
   # ---------------------------------------------------------------------------

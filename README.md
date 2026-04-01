@@ -26,9 +26,9 @@ make firewall        # show UFW status
 # Traefik cert debug
 docker logs traefik 2>&1 | grep -i acme
 
-# Local dev (Postgres + Valkey, ports exposed, no Doppler)
-make dev-up
-make dev-down
+# Local dev (Postgres + Valkey + ClickStack, ENV=dev in .env)
+make up              # same command — detects ENV=dev automatically
+make down
 ```
 
 **Internal hostnames (container-to-container):**
@@ -291,7 +291,7 @@ networks:
     external: true
   postgres-net:   # omit if app doesn't use Postgres
     external: true
-  monitoring-net: # include to reach otel-collector by hostname
+  monitoring-net: # include to reach clickstack by hostname
     external: true
 
 services:

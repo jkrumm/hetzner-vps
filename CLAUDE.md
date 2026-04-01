@@ -208,7 +208,7 @@ networks:
     external: true
   postgres-net:   # if using Postgres
     external: true
-  monitoring-net: # if sending OTel — needed to reach otel-collector by hostname
+  monitoring-net: # if sending OTel — needed to reach clickstack by hostname
     external: true
 
 services:
