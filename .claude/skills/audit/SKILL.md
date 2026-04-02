@@ -106,7 +106,7 @@ ssh vps "journalctl -p warning -n 100 --no-pager 2>/dev/null | grep -iE 'sudo|pa
 List recent S3 backups to verify the daily cron ran:
 
 ```bash
-ssh vps "op run --env-file=.env.tpl -- aws s3 ls \${AWS_S3_BUCKET}/backups/ --endpoint-url \${AWS_S3_ENDPOINT} | tail -5"
+ssh vps "cd ~/vps && op run --env-file=.env.tpl -- bash -c 'aws s3 ls \$AWS_S3_BUCKET/backups/ --endpoint-url \$AWS_S3_ENDPOINT --recursive | tail -5'"
 ```
 
 **Thresholds:**
