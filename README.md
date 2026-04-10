@@ -255,11 +255,11 @@ Apps create their own users and databases on top of this superuser.
 | `AWS_S3_ENDPOINT` | `https://...` | S3-compatible provider endpoint URL |
 | `UPTIME_KUMA_PUSH_URL` | `https://...` | Uptime Kuma → Add monitor → Push type → copy URL |
 
-**Watchtower (ntfy notifications)**
+**Watchtower (Slack notifications)**
 
 | Variable | Value | How to get |
 |-|-|-|
-| `NTFY_TOKEN` | `tk_xxx` | `docker exec ntfy ntfy token list jkrumm` on HomeLab, or `op read "op://common/ntfy/TOKEN"` |
+| `SLACK_WATCHTOWER_URL` | `slack://hook:...@webhook` | `op read "op://common/slack/WATCHTOWER_URL" --account tkrumm` |
 
 **Monitoring**
 

@@ -67,7 +67,7 @@ Key variables:
 | `CF_TUNNEL_ID` | VPS tunnel UUID — used by `scripts/cf-tunnel-ingress.sh` |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
-| `NTFY_TOKEN` | Watchtower → ntfy (`ntfy.jkrumm.com/vps-watchtower`) via shoutrrr |
+| `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
 | `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — in `common` vault |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
@@ -172,7 +172,7 @@ Makefile                      Operational shortcuts
 
 **Valkey** — `container_name: redis` so apps reference it as `redis:6379`. Persistence enabled (`--save 60 1`). Major version pinned — update manually.
 
-**Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Pushover via shoutrrr at warn level (failures only). Runs daily at 04:00.
+**Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Slack #updates via shoutrrr at warn level (failures only). Runs daily at 04:00.
 
 **ClickStack** — all-in-one observability container (`clickhouse/clickstack-all-in-one`). Bundles ClickHouse, OTel Collector, HyperDX UI, and MongoDB. Apps on `monitoring-net` send OTLP to `clickstack:4318`. HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only via Traefik). OTel HTTP endpoint at `otel.DOMAIN` (public, for browser SDKs/session replay). Watchtower auto-updates. No auth needed for OTel ingestion; UI auth via first-visit account creation (persisted in internal MongoDB). Dev: `http://hyperdx.local:7707`.
 

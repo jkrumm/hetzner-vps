@@ -18,7 +18,7 @@ BESZEL_AGENT_KEY=op://vps/beszel/AGENT_KEY
 EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
 
 # --- Notifications ---
-NTFY_TOKEN=op://common/ntfy/TOKEN
+SLACK_WATCHTOWER_URL=op://common/slack/WATCHTOWER_URL
 
 # --- Backups ---
 AWS_ACCESS_KEY_ID=op://common/backblaze-s3/ACCESS_KEY_ID
