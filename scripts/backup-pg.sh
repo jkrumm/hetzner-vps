@@ -16,7 +16,9 @@ set -euo pipefail
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILENAME="postgres_${POSTGRES_DB}_${TIMESTAMP}.dump"
 BACKUP_PREFIX="backups/vps/postgres"
-RETENTION_DAYS=14
+# Retention is enforced by the B2 bucket lifecycle rule on prefix `backups/vps/`
+# (hide after 14 days, delete 1 day after hiding). The shared backup key has no
+# deleteFiles capability — append-only by design for ransomware safety.
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
@@ -56,22 +58,7 @@ docker run --rm \
 
 log "Backup uploaded: s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}"
 
-# Remove old backups (retention policy)
-log "Pruning backups older than ${RETENTION_DAYS} days..."
-aws s3 ls "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/" \
-    --endpoint-url "${AWS_S3_ENDPOINT}" \
-  | awk '{print $4}' \
-  | while read -r key; do
-    # Parse date from filename: postgres_<db>_YYYYMMDD_HHMMSS.dump
-    filedate=$(echo "${key}" | grep -oP '\d{8}' | head -1) || continue
-    [[ -z "${filedate}" ]] && continue
-    cutoff=$(date -d "${RETENTION_DAYS} days ago" +%Y%m%d)
-    if [[ "${filedate}" < "${cutoff}" ]]; then
-      log "Deleting old backup: ${key}"
-      aws s3 rm "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${key}" \
-        --endpoint-url "${AWS_S3_ENDPOINT}"
-    fi
-  done
+# Retention handled by B2 lifecycle rule — no client-side pruning needed.
 
 log "Backup complete."
 ping_kuma "up" "backup_ok"
