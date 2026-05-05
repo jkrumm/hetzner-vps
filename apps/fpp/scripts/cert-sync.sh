@@ -24,12 +24,11 @@ if [[ ! -s "${ACME_JSON}" ]]; then
   exit 1
 fi
 
-cert_b64=$(jq -r --arg d "*.${DOMAIN}" \
-  '.letsencrypt.Certificates[] | select(.domain.main == $d) | .certificate' \
-  "${ACME_JSON}")
-key_b64=$(jq -r --arg d "*.${DOMAIN}" \
-  '.letsencrypt.Certificates[] | select(.domain.main == $d) | .key' \
-  "${ACME_JSON}")
+# Traefik can store the wildcard cert as either the main domain or as a SAN
+# under another cert (e.g. main=jkrumm.com, sans=["*.jkrumm.com"]). Match both.
+JQ_SELECT='.letsencrypt.Certificates[] | select(([.domain.main] + (.domain.sans // [])) | index($d))'
+cert_b64=$(jq -r --arg d "*.${DOMAIN}" "${JQ_SELECT} | .certificate" "${ACME_JSON}")
+key_b64=$(jq -r --arg d "*.${DOMAIN}" "${JQ_SELECT} | .key"         "${ACME_JSON}")
 
 if [[ -z "${cert_b64}" || "${cert_b64}" == "null" ]]; then
   echo "ERROR: wildcard certificate for *.${DOMAIN} not found in ${ACME_JSON}." >&2

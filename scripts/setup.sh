@@ -369,5 +369,5 @@ log " 7. Sync TLS cert:        make fpp-cert-sync   (extracts wildcard cert for 
 log " 8. Start all stacks:     make up"
 log "                          (networking → infra → monitoring → fpp in order)"
 log " 9. Provision DBs:        make postgres-setup && make fpp-mariadb-setup"
-log "10. DNS A record:         db.\${DOMAIN} → VPS public IP (DNS-only / grey cloud)"
+log "10. DNS A record:         fpp-db.\${DOMAIN} → VPS public IP (DNS-only / grey cloud)"
 log "============================================================"
