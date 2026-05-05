@@ -273,6 +273,18 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 | `MARIADB_FPP_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` — application user (REQUIRE SSL) |
 | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` | `https://...` | Separate Uptime Kuma monitor for the MariaDB backup cron |
 
+**FPP application services** (`apps/fpp/compose.yml` — fpp-server, fpp-analytics, updater)
+
+| Variable | Value | How to get |
+|-|-|-|
+| `FPP_SERVER_SECRET` | `<generated>` | `openssl rand -hex 32` — bearer token between Vercel and fpp-server |
+| `FPP_SERVER_SENTRY_DSN` | `https://...@sentry.io/...` | Sentry project for fpp-server |
+| `FPP_ANALYTICS_SECRET_TOKEN` | `<generated>` | `openssl rand -hex 32` — bearer token between Vercel and fpp-analytics |
+| `FPP_ANALYTICS_SENTRY_DSN` | `https://...@sentry.io/...` | Sentry project for fpp-analytics |
+| `FPP_BEA_BASE_URL` | `https://...` | Bun email API base URL (used by fpp-analytics for survey emails) |
+| `FPP_BEA_SECRET_KEY` | `<secret>` | Auth key for the bun email API |
+| `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | `https://...` | Heartbeat URL for the 10-min sync sidecar (separate Kuma monitor) |
+
 **Backups (S3-compatible object storage)**
 
 | Variable | Value | How to get |

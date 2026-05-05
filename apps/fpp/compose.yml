@@ -1,23 +1,35 @@
 ---
-# Free Planning Poker — single-tenant stack (MariaDB now; fpp-server + fpp-analytics later).
+# Free Planning Poker — single-tenant stack: MariaDB + fpp-server + fpp-analytics.
 #
 # This compose lives in apps/fpp/ on purpose: MariaDB is exposed on a public port
 # so Vercel can reach it. That breaks the repo-wide "no inbound ports" invariant,
 # so the deviation is quarantined here rather than poisoning compose.infra.yml.
 # See ../../CLAUDE.md → Security Invariants for the documented exception.
 #
+# fpp-server and fpp-analytics are deployed via RollHook from the
+# jkrumm/free-planning-poker repo (push to master). fpp-analytics-updater runs
+# the same image as fpp-analytics but in a sleep-loop sidecar and is bounced
+# manually when its image needs refreshing (no zero-downtime requirement —
+# 10-min polling cron, brief restart is fine).
+#
 # Bootstrap order on a fresh server:
 #   1. make networking-up           (Traefik gets *.${DOMAIN} cert via DNS-01)
 #   2. make fpp-cert-sync           (extracts wildcard cert into apps/fpp/certs/)
 #   3. make fpp-up                  (MariaDB starts, refuses to start without certs)
 #   4. make fpp-mariadb-setup       (provisions fpp user + grants)
+#   5. Manual one-shot: docker login registry.jkrumm.com, build+push initial
+#      fpp-server / fpp-analytics images so the registry has something to pull.
+#      See apps/fpp/MIGRATION.md → Bootstrap section.
 
 networks:
   mariadb-net:
     external: true
+  proxy:
+    external: true
 
 volumes:
   mariadb-data:
+  fpp-analytics-data:
 
 services:
   mariadb:
@@ -63,3 +75,132 @@ services:
       driver: journald
       options:
         tag: mariadb
+
+  # ---------------------------------------------------------------------------
+  # fpp-server — Bun + Elysia WebSocket server. Public via Cloudflare Tunnel +
+  # Traefik. Deployed via RollHook on push to jkrumm/free-planning-poker:master.
+  # ---------------------------------------------------------------------------
+  fpp-server:
+    image: ${IMAGE_TAG:-registry.jkrumm.com/fpp-server:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: INFO
+      TRPC_URL: https://free-planning-poker.com/api/trpc
+      FPP_SERVER_SECRET: ${FPP_SERVER_SECRET}
+      SENTRY_DSN: ${FPP_SERVER_SENTRY_DSN}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3003/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fpp-server.rule=Host(`fpp-server.${DOMAIN}`)"
+      - "traefik.http.routers.fpp-server.entrypoints=websecure"
+      - "traefik.http.routers.fpp-server.tls.certresolver=letsencrypt"
+      - "traefik.http.services.fpp-server.loadbalancer.server.port=3003"
+      - "traefik.http.routers.fpp-server.middlewares=rate-limit@file,security-headers@file"
+      # Active health check — Traefik stops routing to the draining instance the
+      # moment SIGTERM flips /health to 503 (see fpp-server src/index.ts).
+      - "traefik.http.services.fpp-server.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.fpp-server.loadbalancer.healthcheck.interval=5s"
+      # Managed by RollHook — Watchtower must not interfere.
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys.
+      - "rollhook.allowed_repos=jkrumm/free-planning-poker"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # fpp-analytics — FastAPI read-only analytics API. Reads parquet snapshots
+  # written by fpp-analytics-updater. Public via Traefik. RollHook-managed.
+  # ---------------------------------------------------------------------------
+  fpp-analytics:
+    image: ${IMAGE_TAG:-registry.jkrumm.com/fpp-analytics:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    environment:
+      LOG_LEVEL: INFO
+      SENTRY_ENVIRONMENT: production
+      DATA_DIR: /app/data
+      ANALYTICS_SECRET_TOKEN: ${FPP_ANALYTICS_SECRET_TOKEN}
+      FPP_ANALYTICS_SENTRY_DSN: ${FPP_ANALYTICS_SENTRY_DSN}
+      BEA_BASE_URL: ${FPP_BEA_BASE_URL}
+      BEA_SECRET_KEY: ${FPP_BEA_SECRET_KEY}
+    volumes:
+      # Read-only — only the updater writes parquet snapshots.
+      - fpp-analytics-data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5100/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fpp-analytics.rule=Host(`fpp-analytics.${DOMAIN}`)"
+      - "traefik.http.routers.fpp-analytics.entrypoints=websecure"
+      - "traefik.http.routers.fpp-analytics.tls.certresolver=letsencrypt"
+      - "traefik.http.services.fpp-analytics.loadbalancer.server.port=5100"
+      - "traefik.http.routers.fpp-analytics.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.fpp-analytics.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.fpp-analytics.loadbalancer.healthcheck.interval=10s"
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "rollhook.allowed_repos=jkrumm/free-planning-poker"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # fpp-analytics-updater — sleep-loop sidecar that syncs MariaDB → parquet
+  # every 10 min. Same image as fpp-analytics; manual restart on image refresh
+  # (no zero-downtime requirement — brief gap in a polling cron is fine).
+  #
+  # Connects to mariadb on the internal mariadb-net. MariaDB enforces TLS via
+  # --require-secure-transport=ON so DB_SSL=true is mandatory. The wildcard cert
+  # is *.${DOMAIN} which doesn't match the 'mariadb' hostname, hence
+  # DB_SSL_VERIFY=false. This is internal-network-only TLS (encryption without
+  # peer auth), which is acceptable here — exposure is bounded by Docker's
+  # internal network. Vercel uses fpp-db.${DOMAIN}:33306 with full verify.
+  # ---------------------------------------------------------------------------
+  fpp-analytics-updater:
+    image: registry.jkrumm.com/fpp-analytics:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["sh", "-c", "while true; do python update_readmodel.py; sleep 600; done"]
+    environment:
+      LOG_LEVEL: INFO
+      SENTRY_ENVIRONMENT: production
+      DATA_DIR: /app/data
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      DB_USERNAME: fpp
+      DB_PASSWORD: ${MARIADB_FPP_PASSWORD}
+      DB_SSL: "true"
+      DB_SSL_VERIFY: "false"
+      FPP_ANALYTICS_SENTRY_DSN: ${FPP_ANALYTICS_SENTRY_DSN}
+      UPTIMEKUMA_PUSH_URL: ${UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL}
+    volumes:
+      - fpp-analytics-data:/app/data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - mariadb-net
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "3" }

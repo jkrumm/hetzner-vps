@@ -76,6 +76,9 @@ Key variables:
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `MARIADB_DB`, `MARIADB_ROOT_PASSWORD`, `MARIADB_FPP_PASSWORD` | FPP MariaDB (`apps/fpp/compose.yml` + setup/backup/restore scripts) |
 | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` | `apps/fpp/scripts/backup-mariadb.sh` (separate monitor from pg-backup) |
+| `FPP_SERVER_SECRET`, `FPP_SERVER_SENTRY_DSN` | fpp-server (Bun WebSocket) — see `apps/fpp/compose.yml` |
+| `FPP_ANALYTICS_SECRET_TOKEN`, `FPP_ANALYTICS_SENTRY_DSN`, `FPP_BEA_BASE_URL`, `FPP_BEA_SECRET_KEY` | fpp-analytics (FastAPI) + updater sidecar |
+| `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | fpp-analytics-updater 10-min sync heartbeat (separate Kuma monitor) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
 | `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — in `common` vault |
@@ -219,6 +222,18 @@ Vercel connection string:
 ```
 mysql://fpp:<password>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUnauthorized":true}
 ```
+
+### FPP application services
+
+`apps/fpp/compose.yml` also defines the application services that consume this DB:
+
+| Service | Image | Network | Deploy |
+|-|-|-|-|
+| `fpp-server` | `registry.jkrumm.com/fpp-server:latest` | `proxy` | RollHook on push to master |
+| `fpp-analytics` | `registry.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
+| `fpp-analytics-updater` | same as fpp-analytics | `mariadb-net` | manual `docker compose up -d` after image change |
+
+Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.${DOMAIN}` doesn't match the `mariadb` hostname). See `apps/fpp/MIGRATION.md` for the bootstrap and cutover runbook.
 
 ---
 

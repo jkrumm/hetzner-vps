@@ -21,6 +21,17 @@ MARIADB_DB=op://vps/config/MARIADB_DB
 MARIADB_ROOT_PASSWORD=op://vps/mariadb/ROOT_PASSWORD
 MARIADB_FPP_PASSWORD=op://vps/mariadb/FPP_PASSWORD
 
+# --- FPP services (apps/fpp/compose.yml — fpp-server, fpp-analytics, updater) ---
+# Items to create in 1Password before first `make fpp-up`. Paths chosen to keep
+# fpp-* secrets co-located in op://vps/fpp/.
+FPP_SERVER_SECRET=op://vps/fpp/SERVER_SECRET
+FPP_SERVER_SENTRY_DSN=op://vps/fpp/SERVER_SENTRY_DSN
+FPP_ANALYTICS_SECRET_TOKEN=op://vps/fpp/ANALYTICS_SECRET_TOKEN
+FPP_ANALYTICS_SENTRY_DSN=op://vps/fpp/ANALYTICS_SENTRY_DSN
+FPP_BEA_BASE_URL=op://vps/fpp/BEA_BASE_URL
+FPP_BEA_SECRET_KEY=op://vps/fpp/BEA_SECRET_KEY
+UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL=op://vps/config/UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL
+
 # --- Services ---
 UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD
 UMAMI_APP_SECRET=op://vps/umami/APP_SECRET
