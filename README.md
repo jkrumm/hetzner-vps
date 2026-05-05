@@ -242,16 +242,15 @@ Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 m
 |-|-|-|
 | `DOMAIN` | `example.com` | Your apex domain — wildcard cert covers `*.DOMAIN` |
 | `ACME_EMAIL` | `you@example.com` | Email for Let's Encrypt notifications |
-| `CF_API_TOKEN` | `op://common/cloudflare/DNS_API_TOKEN` | Cloudflare → My Profile → API Tokens → needs **DNS:Edit** + **Cloudflare Tunnel:Edit** for all zones. Lives in `common` — same token used by HomeLab. Traefik receives it as `CF_DNS_API_TOKEN` (compose mapping — lego requires that name). |
-| `CLOUDFLARE_TUNNEL_TOKEN` | `op://vps/cloudflare-tunnel/TOKEN` | Per-server. Cloudflare → Zero Trust → Networks → Tunnels → Create tunnel → copy token. |
+All Cloudflare env vars use the unified `CLOUDFLARE_*` prefix (matches the centralized `/cloudflare` skill at `~/SourceRoot/.claude/skills/cloudflare/`).
 
-**Cloudflare API context (used by `/cloudflare` skill)**
-
-| Variable | Source | How to get |
+| Variable | Source | Notes |
 |-|-|-|
-| `CF_ACCOUNT_ID` | `op://common/cloudflare/ACCOUNT_ID` | Account ID — same for all zones/tunnels. Lives in `common`. |
-| `CF_ZONE_ID` | `op://common/cloudflare/ZONE_ID_JKRUMM_COM` | Zone ID for `jkrumm.com`. Other zones (basalt-ui.com, rollhook.com, …) are looked up on demand by the skill. |
-| `CF_TUNNEL_ID` | `op://vps/cloudflare-tunnel/TUNNEL_ID` | UUID of the **VPS** tunnel (different from HomeLab's). Stored alongside the per-server tunnel TOKEN. |
+| `CLOUDFLARE_API_TOKEN` | `op://common/cloudflare/DNS_API_TOKEN` | Cloudflare → My Profile → API Tokens → needs **DNS:Edit** + **Cloudflare Tunnel:Edit** for all zones. Same token as HomeLab. Traefik receives it as `CF_DNS_API_TOKEN` via `compose.networking.yml` env mapping (lego requires that exact name). |
+| `CLOUDFLARE_ACCOUNT_ID` | `op://common/cloudflare/ACCOUNT_ID` | Account ID — same for all zones/tunnels. |
+| `CLOUDFLARE_ZONE_ID` | `op://common/cloudflare/ZONE_ID_JKRUMM_COM` | Zone ID for `jkrumm.com`. Other zones (basalt-ui.com, rollhook.com, shutterflow.app) are looked up on demand by the skill. |
+| `CLOUDFLARE_TUNNEL_ID` | `op://vps/cloudflare-tunnel/TUNNEL_ID` | UUID of the **VPS** tunnel (different from HomeLab's — separate tunnels). |
+| `CLOUDFLARE_TUNNEL_TOKEN` | `op://vps/cloudflare-tunnel/TOKEN` | Per-server cloudflared auth. Cloudflare → Zero Trust → Networks → Tunnels → Create tunnel → copy token. |
 
 **PostgreSQL**
 

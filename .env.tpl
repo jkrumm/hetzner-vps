@@ -3,11 +3,12 @@
 
 # --- Cloudflare ---
 # Token + account + primary zone ID live in `common` — shared with HomeLab.
-# Tunnel token + tunnel ID are per-server.
-CF_API_TOKEN=op://common/cloudflare/DNS_API_TOKEN
-CF_ACCOUNT_ID=op://common/cloudflare/ACCOUNT_ID
-CF_ZONE_ID=op://common/cloudflare/ZONE_ID_JKRUMM_COM
-CF_TUNNEL_ID=op://vps/cloudflare-tunnel/TUNNEL_ID
+# Tunnel token + tunnel ID are per-server (HomeLab and VPS run separate tunnels).
+# Variable names match the unified /cloudflare skill (~/SourceRoot/.claude/skills/cloudflare/).
+CLOUDFLARE_API_TOKEN=op://common/cloudflare/DNS_API_TOKEN
+CLOUDFLARE_ACCOUNT_ID=op://common/cloudflare/ACCOUNT_ID
+CLOUDFLARE_ZONE_ID=op://common/cloudflare/ZONE_ID_JKRUMM_COM
+CLOUDFLARE_TUNNEL_ID=op://vps/cloudflare-tunnel/TUNNEL_ID
 CLOUDFLARE_TUNNEL_TOKEN=op://vps/cloudflare-tunnel/TOKEN
 
 # --- Postgres ---
