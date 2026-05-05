@@ -100,6 +100,16 @@ First list records to find the ID, then:
 ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/RECORD_ID" -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK\" if r[\"success\"] else r[\"errors\"])"'"'"''
 ```
 
+### Add a DNS A record (grey cloud / DNS-only — bypasses Cloudflare proxy)
+
+For services that can't go through the tunnel (raw TCP like MySQL, or Tailscale-only). `proxied:false` is the grey-cloud setting — DNS resolves directly to the IP, no Cloudflare in the path.
+
+```bash
+ssh vps 'op run --env-file=~/vps/.env.tpl -- bash -c '"'"'curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" --data "{\"type\":\"A\",\"name\":\"SUBDOMAIN\",\"content\":\"PUBLIC_IP\",\"proxied\":false}" | python3 -c "import json,sys; r=json.load(sys.stdin); print(\"OK:\",r[\"result\"][\"name\"],\"→\",r[\"result\"][\"content\"]) if r[\"success\"] else print(\"ERR:\",r[\"errors\"])"'"'"''
+```
+
+Replace `SUBDOMAIN` and `PUBLIC_IP`. Use the VPS public IP for raw-TCP exposure (e.g. `fpp-db` → MariaDB on 33306) or the Tailscale IP for Tailscale-only services.
+
 ### Look up Zone ID for a secondary domain
 
 ```bash

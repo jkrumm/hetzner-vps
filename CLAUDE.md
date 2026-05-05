@@ -20,14 +20,22 @@ make down                # dev: compose.dev.yml | prod: reverse order
 make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
+make fpp-up      / make fpp-down
 
-# Postgres schema/user provisioning — idempotent, works for both envs
+# DB schema/user provisioning — idempotent, works for both envs
 make postgres-setup      # run after make infra-up, before make monitoring-up
+make fpp-mariadb-setup   # run after make fpp-up
+
+# FPP TLS cert sync (extracts *.${DOMAIN} from traefik/acme.json into apps/fpp/certs/)
+make fpp-cert-sync       # run once after networking-up; cron does it every 6h
 
 # Status + ops
 make ps                  # docker ps with name/status/ports
 make shell-postgres      # psql shell (uses op run with .env.tpl)
+make fpp-shell           # mariadb shell (uses op run with .env.tpl)
 make backup              # manual pg_dump → S3 (prod only — guarded)
+make fpp-backup          # manual mariadb-dump → S3 (prod only — guarded)
+make fpp-restore         # interactive mariadb restore from S3 (prod only)
 make firewall            # show UFW status and rules
 
 # Deploy config changes to server
@@ -66,6 +74,8 @@ Key variables:
 | `CF_ZONE_ID` | Zone ID for `DOMAIN` — used by `scripts/cf-tunnel-ingress.sh` |
 | `CF_TUNNEL_ID` | VPS tunnel UUID — used by `scripts/cf-tunnel-ingress.sh` |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
+| `MARIADB_DB`, `MARIADB_ROOT_PASSWORD`, `MARIADB_FPP_PASSWORD` | FPP MariaDB (`apps/fpp/compose.yml` + setup/backup/restore scripts) |
+| `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` | `apps/fpp/scripts/backup-mariadb.sh` (separate monitor from pg-backup) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
 | `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — in `common` vault |
@@ -86,7 +96,8 @@ S3-compatible object storage, bucket `jkrumm`. All paths are prefixed to avoid c
 jkrumm/
 └── backups/
     ├── vps/
-    │   └── postgres/       ← backup-pg.sh (daily cron, 14-day retention)
+    │   ├── postgres/       ← backup-pg.sh (daily cron 03:00, 14-day retention)
+    │   └── mariadb/        ← apps/fpp/scripts/backup-mariadb.sh (daily cron 03:30)
     └── homelab/
         ├── clickhouse/     ← future: ClickHouse backups
         ├── postgres/       ← future: HomeLab Postgres (if any)
@@ -107,6 +118,7 @@ External networks (pre-created by `setup.sh`, referenced as `external: true`):
 |-|-|-|
 | `proxy` | Traefik routing | Traefik, all apps |
 | `postgres-net` | Postgres access | Postgres, apps needing DB |
+| `mariadb-net` | FPP MariaDB access | MariaDB, FPP services, backup container |
 | `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
 | `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, apps sending OTel |
 
@@ -144,20 +156,29 @@ Internal networks (created by Docker Compose, not external):
 
 ```
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
-compose.infra.yml             Databases (Postgres, Valkey)
+compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
-compose.dev.yml               Local dev (Postgres + Valkey + ClickStack with ports exposed)
+compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
+apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel); fpp-server + fpp-analytics later
+apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
+apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 + Uptime Kuma push ping
+apps/fpp/scripts/restore-mariadb.sh  Restore from S3 (interactive confirmation, drops DB first)
+apps/fpp/scripts/cert-sync.sh        Extract *.${DOMAIN} cert from traefik/acme.json + FLUSH SSL
+apps/fpp/fail2ban/                   filter + jail configs installed by setup.sh
+apps/fpp/certs/                      gitignored — populated by cert-sync.sh, mounted RO into mariadb
 config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
 traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
-scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron)
+scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron, fail2ban)
 scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
-cron/pg-backup                Dropped into /etc/cron.d/ — runs backup at 03:00 daily
+cron/pg-backup                Postgres backup, daily 03:00
+cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
+cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
 ```
@@ -177,6 +198,27 @@ Makefile                      Operational shortcuts
 **ClickStack** — all-in-one observability container (`clickhouse/clickstack-all-in-one`). Bundles ClickHouse, OTel Collector, HyperDX UI, and MongoDB. Apps on `monitoring-net` send OTLP to `clickstack:4318`. HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only via Traefik). OTel HTTP endpoint at `otel.DOMAIN` (public, for browser SDKs/session replay). Watchtower auto-updates. No auth needed for OTel ingestion; UI auth via first-visit account creation (persisted in internal MongoDB). Dev: `http://hyperdx.local:7707`.
 
 **Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
+
+---
+
+## FPP MariaDB (apps/fpp/)
+
+Single-tenant database for Free Planning Poker. Lives outside `compose.infra.yml` because **TCP 33306 is exposed publicly** for Vercel — Cloudflare Tunnel can't proxy raw MySQL (TCP origins need cloudflared/WARP client; Spectrum is Enterprise-only). Quarantining the deviation in `apps/fpp/` keeps `compose.infra.yml`'s "no inbound ports" invariant intact.
+
+Defenses on the open port:
+
+- `--require-secure-transport=ON` and `REQUIRE SSL` on the `fpp@'%'` user — no plaintext, ever.
+- TLS cert is the wildcard `*.${DOMAIN}` from Traefik's ACME — extracted by `apps/fpp/scripts/cert-sync.sh` (cron every 6h, `FLUSH SSL` on rotation, no restart).
+- fail2ban watches mariadb container's journald logs (`CONTAINER_TAG=mariadb`) and bans repeated auth failures at the iptables `DOCKER-USER` chain (UFW does NOT apply to Docker-published ports — `DOCKER-USER` is what works).
+- Schema-scoped user — `fpp@'%'` has `ALL PRIVILEGES` on `${MARIADB_DB}` only, no other DBs, no admin grants.
+- `mariadb-dump` backup runs on the internal `mariadb-net` (no public roundtrip).
+
+DNS: `fpp-db.${DOMAIN}` is a **DNS-only A record** (grey cloud) → VPS public IP. Cloudflare can't proxy MySQL anyway, so DNS-only is correct — and CGNAT considerations don't apply since this hits the public IP, not the Tailscale IP.
+
+Vercel connection string:
+```
+mysql://fpp:<password>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUnauthorized":true}
+```
 
 ---
 
@@ -271,12 +313,14 @@ See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patte
 
 Never violate these:
 
-- No `ports:` for any service except OTel (4317/4318 Tailscale-reachable) and monitoring agents
-- Zero inbound ports — cloudflared is outbound-only, SSH via Tailscale only
-- Provider firewall: zero inbound rules (configured via hosting panel)
+- No `ports:` for any service except OTel (4317/4318 Tailscale-reachable), monitoring agents, **and the FPP MariaDB exception below**
+- Zero inbound ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
+- Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
-- Postgres and Valkey: no auto-update via Watchtower — manual only
+- Postgres, Valkey, and MariaDB: no auto-update via Watchtower — manual only
+
+**FPP MariaDB exception (TCP 33306 inbound):** Vercel needs to reach the FPP database and Cloudflare doesn't proxy MySQL on non-Enterprise plans. Mitigations: TLS required (`--require-secure-transport=ON` + `REQUIRE SSL` on the user), schema-scoped `fpp@'%'` user, fail2ban on auth failures via `DOCKER-USER` chain, no remote root. The deviation is contained in `apps/fpp/` so future apps don't pattern-match off it. See **FPP MariaDB** section above.
 
 ---
 
@@ -292,11 +336,17 @@ bash /home/jkrumm/vps/scripts/setup.sh
 3. Uncomment `ListenAddress <tailscale-ip>` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
 4. `tailscale set --ssh --accept-risk=lose-ssh` → enables SSH badge in Tailscale admin
 5. Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`)
-6. `cd ~/vps && make up`
-7. `make postgres-setup` → then start any app needing Postgres
-8. `reboot` → verify kernel updated, all containers restart automatically
+6. `cd ~/vps && make networking-up` → wait for Traefik to issue `*.${DOMAIN}` cert (1–2 min, check `docker logs traefik | grep -i acme`)
+7. `make fpp-cert-sync` → extracts wildcard cert into `apps/fpp/certs/`
+8. `make up` → starts everything (idempotent — re-runs networking-up too)
+9. `make postgres-setup` → provision Postgres schemas/users
+10. `make fpp-mariadb-setup` → provision MariaDB fpp user + grants
+11. Add DNS-only A record `fpp-db.${DOMAIN}` → VPS public IP (grey cloud — not proxied)
+12. `reboot` → verify kernel updated, all containers restart automatically
 
-**Note:** HostingFuchs has no panel firewall — UFW + sshd Tailscale binding is sufficient.
+**Note:** HostingFuchs has no panel firewall. UFW + sshd Tailscale binding is sufficient for everything except MariaDB. **Docker bypasses UFW for published ports**, so TCP 33306 is publicly reachable as soon as `make fpp-up` runs — no firewall change needed. fail2ban watches MariaDB auth failures via journald and bans source IPs at the iptables `DOCKER-USER` chain (which Docker DOES evaluate before its NAT rules).
+
+**Security Invariants — FPP MariaDB exception**: Vercel needs to reach the FPP database and Cloudflare doesn't proxy MySQL on non-Enterprise plans. Mitigations: TLS required, schema-scoped user, fail2ban. Quarantined to `apps/fpp/` so future apps don't pattern-match.
 
 ---
 

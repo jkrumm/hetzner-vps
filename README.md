@@ -8,7 +8,7 @@ Production Docker Compose stack for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubu
 
 ```bash
 # Primary operations
-make up              # start all stacks (networking → infra → monitoring)
+make up              # start all stacks (networking → infra → monitoring → fpp)
 make down            # stop all stacks (reverse order)
 make ps              # container status
 
@@ -19,6 +19,14 @@ make monitoring-down
 # Postgres
 make backup          # manual pg_dump → S3
 make shell-postgres  # psql shell
+
+# FPP / MariaDB (apps/fpp/)
+make fpp-up                  # start MariaDB (and fpp-server / fpp-analytics later)
+make fpp-down
+make fpp-mariadb-setup       # provision fpp user + grants (idempotent)
+make fpp-cert-sync           # extract *.${DOMAIN} cert for MariaDB TLS
+make fpp-backup              # manual mariadb-dump → S3
+make fpp-shell               # mariadb shell as root
 
 # Ops
 make firewall        # show UFW status
@@ -36,6 +44,7 @@ make down
 | Service | Hostname | Port |
 |-|-|-|
 | PostgreSQL | `postgres` | `5432` |
+| MariaDB (FPP) | `mariadb` | `3306` |
 | Valkey/Redis | `redis` | `6379` |
 | ClickStack OTel (gRPC) | `clickstack` | `4317` |
 | ClickStack OTel (HTTP) | `clickstack` | `4318` |
@@ -47,6 +56,7 @@ make down
 |-|-|
 | `proxy` | Always — Traefik routing |
 | `postgres-net` | App uses Postgres |
+| `mariadb-net` | App uses FPP MariaDB |
 | `valkey-net` | App uses Valkey/Redis |
 | `monitoring-net` | App sends OTel telemetry |
 
@@ -187,19 +197,27 @@ All secrets are pre-populated in 1Password (`vps` + `common` vaults). See the **
 
 Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`). The `.env.tpl` references it automatically.
 
-### 7. Provider Firewall
+### 7. Firewall
 
-Configure zero inbound rules in the hosting panel (no ports open from the internet). SSH is Tailscale-only; public traffic is Cloudflare Tunnel outbound-only.
+HostingFuchs has no panel firewall, so UFW is the only host-level filter. UFW denies all inbound by default and only allows the Tailscale interface — that's sufficient for everything except FPP MariaDB.
+
+**Note on Docker + UFW:** Docker publishes ports via its own iptables rules that bypass UFW entirely. Adding `ports: ["33306:3306"]` to `apps/fpp/compose.yml` makes MariaDB reachable on the public IP automatically — UFW does not block it. fail2ban operates on the `DOCKER-USER` chain (not the UFW chain) to ban auth-failure source IPs.
 
 Verify UFW on the server: `make firewall`
 
 ### 8. Start the stack
 
 ```bash
-make up
+make networking-up        # issues *.${DOMAIN} cert via DNS-01
+make fpp-cert-sync        # extracts wildcard cert for MariaDB TLS
+make up                   # full stack (networking → infra → monitoring → fpp)
+make postgres-setup       # provision Postgres schemas + users
+make fpp-mariadb-setup    # provision MariaDB fpp user + grants
 ```
 
 Verify: `make ps` — all containers should be running within ~30 seconds.
+
+Add a DNS-only A record `fpp-db.${DOMAIN}` → VPS public IP (grey cloud, **not** proxied — Cloudflare can't proxy MySQL).
 
 ### 9. Cloudflare tunnel ingress + DNS
 
@@ -244,6 +262,17 @@ Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 m
 | `POSTGRES_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` |
 
 Apps create their own users and databases on top of this superuser.
+
+**MariaDB (FPP)**
+
+Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it's exposed publicly on TCP 33306 — the deviation is quarantined out of shared infra. Vercel connects with `?ssl={"rejectUnauthorized":true}` against `fpp-db.${DOMAIN}`.
+
+| Variable | Value | How to get |
+|-|-|-|
+| `MARIADB_DB` | `free-planning-poker` | Database name (in 1Password: `vps/config/MARIADB_DB`) |
+| `MARIADB_ROOT_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` — used by backup/restore/setup scripts |
+| `MARIADB_FPP_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` — application user (REQUIRE SSL) |
+| `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` | `https://...` | Separate Uptime Kuma monitor for the MariaDB backup cron |
 
 **Backups (S3-compatible object storage)**
 
@@ -329,17 +358,21 @@ See `CLAUDE.md` → RollHook section for zero-downtime deployment constraints.
 
 ## Backups
 
-Daily cron at 03:00 via `/etc/cron.d/pg-backup`. Triggers `scripts/backup-pg.sh`:
-1. Runs `pg_dump` in a one-shot `postgres:18` container
-2. Streams compressed dump (`-Fc --compress=9`) to object storage via awscli
-3. Prunes backups older than 14 days
-4. Pings Uptime Kuma push monitor — status `up` or `down`
+Two daily backups, both stream to the same `jkrumm` B2 bucket under `backups/vps/`. Retention (14-day hide → delete) enforced by a single B2 lifecycle rule on the `backups/vps/` prefix — append-only key, no client-side pruning.
+
+| Cron | Time | Script | S3 path | Kuma var |
+|-|-|-|-|-|
+| `/etc/cron.d/pg-backup` | 03:00 | `scripts/backup-pg.sh` | `backups/vps/postgres/` | `UPTIME_KUMA_PUSH_URL` |
+| `/etc/cron.d/fpp-mariadb-backup` | 03:30 | `apps/fpp/scripts/backup-mariadb.sh` | `backups/vps/mariadb/` | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` |
 
 ```bash
-make backup                                                    # manual trigger
+# Manual triggers
+make backup           # Postgres
+make fpp-backup       # MariaDB
 
-BACKUP_FILE=postgres_mydb_20260224_030000.dump \
-  op run --env-file=.env.tpl -- ./scripts/restore-pg.sh                      # restore (drops + recreates DB)
+# Restore (interactive — confirms destructive action)
+op run --env-file=.env.tpl -- ./scripts/restore-pg.sh
+make fpp-restore
 ```
 
 ---
