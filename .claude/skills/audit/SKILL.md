@@ -50,6 +50,7 @@ ssh vps "docker system df"
 **Expected running containers:**
 - Networking: `cloudflared`, `traefik`, `socket-proxy`, `socket-proxy-claude`, `socket-proxy-rollhook`, `rollhook`
 - Infra: `postgres`, `redis`
+- FPP (`apps/fpp/compose.yml`): `mariadb`
 - Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
 
 **Thresholds:**
@@ -84,7 +85,7 @@ ssh vps "tailscale status"
 ### Phase 5: Recent Errors (Log Scan)
 
 ```bash
-ssh vps "for svc in traefik cloudflared clickstack; do echo \"=== \$svc ===\"; docker logs \$svc --tail=20 2>&1 | grep -iE 'error|fatal|panic|crash|exception' | grep -v 'context canceled' | tail -5; done"
+ssh vps "for svc in traefik cloudflared clickstack mariadb; do echo \"=== \$svc ===\"; docker logs \$svc --tail=20 2>&1 | grep -iE 'error|fatal|panic|crash|exception' | grep -v 'context canceled' | tail -5; done"
 ```
 
 ```bash
@@ -103,20 +104,25 @@ ssh vps "journalctl -p warning -n 100 --no-pager 2>/dev/null | grep -iE 'sudo|pa
 
 ### Phase 6: Backup Status
 
-List recent S3 backups to verify the daily cron ran:
+Two daily backups, separate S3 prefixes:
 
 ```bash
-ssh vps "cd ~/vps && op run --env-file=.env.tpl -- bash -c 'aws s3 ls \$AWS_S3_BUCKET/backups/ --endpoint-url \$AWS_S3_ENDPOINT --recursive | tail -5'"
+ssh vps "cd ~/vps && op run --env-file=.env.tpl -- bash -c '
+  echo \"--- postgres (cron 03:00):\"
+  aws s3 ls \$AWS_S3_BUCKET/backups/vps/postgres/ --endpoint-url \$AWS_S3_ENDPOINT | sort | tail -2
+  echo \"--- mariadb (cron 03:30):\"
+  aws s3 ls \$AWS_S3_BUCKET/backups/vps/mariadb/ --endpoint-url \$AWS_S3_ENDPOINT | sort | tail -2
+'"
 ```
 
-**Thresholds:**
+**Thresholds (apply to each prefix independently):**
 - CRITICAL: no backup file from the last 48 hours
-- WARN: no backup file from the last 25 hours (missed last daily run at 03:00)
+- WARN: no backup file from the last 25 hours (missed last daily run)
 
-If backup looks stale, also check cron logs:
+If a backup looks stale, also check cron logs:
 
 ```bash
-ssh vps "grep pg-backup /var/log/syslog 2>/dev/null | tail -5 || journalctl -u cron -n 10 --no-pager"
+ssh vps "grep -E 'pg-backup|fpp-mariadb-backup|fpp-cert-sync' /var/log/syslog 2>/dev/null | tail -10 || journalctl -u cron -n 20 --no-pager"
 ```
 
 ### Phase 7: Pending Updates
@@ -136,20 +142,49 @@ ssh vps "apt list --upgradable 2>/dev/null | grep -v '^Listing'"
 
 ### Phase 8: Manual Upgrade Check
 
-Postgres and Valkey are excluded from Watchtower. Check their current versions vs latest available:
+Postgres, Valkey, and MariaDB are excluded from Watchtower. Check their current versions vs latest available:
 
 ```bash
-ssh vps "docker inspect postgres --format '{{.Config.Image}}' && docker inspect redis --format '{{.Config.Image}}'"
+ssh vps "docker inspect postgres --format '{{.Config.Image}}' && docker inspect redis --format '{{.Config.Image}}' && docker inspect mariadb --format '{{.Config.Image}}'"
 ```
 
 Then use WebSearch to check:
 - Latest stable `postgres` major version on hub.docker.com/\_/postgres
 - Latest stable `valkey/valkey` major version on hub.docker.com/r/valkey/valkey
+- Latest stable `mariadb` LTS version on hub.docker.com/\_/mariadb
 - Any active CVEs for the running major versions
 
 **Thresholds:**
 - WARN: a newer major version has been stable for 3+ months
 - INFO: patch/minor updates within pinned major (Watchtower handles image pulls on restart)
+
+### Phase 9: FPP MariaDB Exception (TCP 33306 public)
+
+Single point of inbound exposure on the VPS — verify the defenses are still in place.
+
+```bash
+ssh vps "
+  echo '--- fail2ban mariadb jail:'
+  sudo fail2ban-client status mariadb 2>&1 | head -10
+  echo
+  echo '--- TLS still required (must reject non-TLS):'
+  docker run --rm --network host -e MYSQL_PWD=invalid mariadb:11.4 mariadb -h 127.0.0.1 -P 33306 -u fpp --skip-ssl --connect-timeout=3 -e 'SELECT 1;' 2>&1 | head -3
+  echo
+  echo '--- TLS cert age (renewed every ~60d by Traefik, synced every 6h by cert-sync.sh):'
+  openssl x509 -in /home/jkrumm/vps/apps/fpp/certs/cert.pem -noout -dates 2>&1
+"
+```
+
+External reachability + TLS cert from a fresh-eyes perspective:
+
+```bash
+echo | openssl s_client -connect fpp-db.jkrumm.com:33306 -starttls mysql -servername fpp-db.jkrumm.com 2>&1 | grep -E 'subject=|issuer=|Verification'
+```
+
+**Thresholds:**
+- CRITICAL: fail2ban jail not active, OR non-TLS connection succeeds (would mean `--require-secure-transport=ON` got dropped), OR cert expired/expiring within 7 days, OR external openssl probe fails to verify
+- WARN: cert expiring within 21 days (cert-sync should have picked up renewal — check Traefik ACME logs), OR fail2ban ban count >50 in last 24h (suggests targeted attack — consider tightening jail or restricting source IPs)
+- INFO: fail2ban currently-banned count — sporadic bans from random scanners are normal
 
 ---
 
@@ -161,31 +196,38 @@ Then use WebSearch to check:
 ## Summary
 🟢 X healthy  🟡 Y warnings  🔴 Z critical
 
-## [1/8] System Resources      🟢/🟡/🔴
+## [1/9] System Resources      🟢/🟡/🔴
 <disk %, memory available, load — numbers only>
 
-## [2/8] Container Health      🟢/🟡/🔴
+## [2/9] Container Health      🟢/🟡/🔴
 <list non-running or high-restart containers; "all running" if clean>
 <Docker disk usage summary if reclaimable >500MB>
 
-## [3/8] Cloudflare Tunnel     🟢/🟡/🔴
+## [3/9] Cloudflare Tunnel     🟢/🟡/🔴
 <connection status, any reconnect events>
 
-## [4/8] Tailscale             🟢/🟡/🔴
+## [4/9] Tailscale             🟢/🟡/🔴
 <online status, peer count, any health warnings>
 
-## [5/8] Recent Errors         🟢/🟡/🔴
+## [5/9] Recent Errors         🟢/🟡/🔴
 <per-service summary; "no errors" if clean>
 
-## [6/8] Backup Status         🟢/🟡/🔴
-<last backup timestamp + file size>
+## [6/9] Backup Status         🟢/🟡/🔴
+postgres: <last backup timestamp>
+mariadb:  <last backup timestamp>
 
-## [7/8] Pending Updates       🟢/🟡/🔴
+## [7/9] Pending Updates       🟢/🟡/🔴
 <watchtower activity + apt package count>
 
-## [8/8] Manual Upgrades       🟢/🟡/🔴
+## [8/9] Manual Upgrades       🟢/🟡/🔴
 postgres: running X, latest Y — <up to date / upgrade available>
 valkey:   running X, latest Y — <up to date / upgrade available>
+mariadb:  running X, latest Y — <up to date / upgrade available>
+
+## [9/9] FPP MariaDB Exception 🟢/🟡/🔴
+fail2ban jail: <active / inactive>, banned now: N, total banned: M
+TLS enforced: <yes/no>, cert valid until: <date>
+External TLS verify (fpp-db.jkrumm.com): <OK / FAILED>
 
 ## Recommendations
 - [CRITICAL] <finding> → <proposed fix>
@@ -209,9 +251,14 @@ For each CRITICAL/WARN finding, propose the fix and ask for confirmation before 
 | Docker image bloat | `ssh vps "docker image prune -f"` (dangling only — safe) |
 | Disk >95% | Report + offer `docker image prune -f` — confirm before running; do NOT auto-run `system prune` |
 | Apt security updates available | `ssh vps "sudo apt upgrade -y --only-upgrade"` (VPS has NOPASSWD sudo) |
-| Backup >48h old | Trigger manual backup: `ssh vps "cd ~/vps && op run --env-file=.env.tpl -- ./scripts/backup-pg.sh"` |
+| Postgres backup >48h old | `ssh vps "cd ~/vps && ENV=prod make backup"` |
+| MariaDB backup >48h old | `ssh vps "cd ~/vps && ENV=prod make fpp-backup"` |
 | Postgres upgrade available | See "Upgrade Procedures" in CLAUDE.md — backup first, then pull + recreate |
 | Valkey upgrade available | See "Upgrade Procedures" in CLAUDE.md — pull + recreate (data in volume) |
+| MariaDB upgrade available (patch/minor) | `ssh vps "cd ~/vps && ENV=prod make fpp-backup"` first, then pull + `make fpp-up` |
+| fail2ban mariadb jail not active | `ssh vps "sudo systemctl restart fail2ban && sudo fail2ban-client status mariadb"` |
+| MariaDB cert <7d from expiry | `ssh vps "cd ~/vps && make fpp-cert-sync"` (forces re-extraction from acme.json + FLUSH SSL) |
+| MariaDB non-TLS connection succeeded (CRITICAL) | Check `--require-secure-transport=ON` in `apps/fpp/compose.yml` is intact, then `ssh vps "cd ~/vps && make fpp-up"` to apply |
 
 **After each repair:** Re-run the relevant phase command to verify the fix worked before moving to the next issue.
 
