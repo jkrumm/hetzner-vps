@@ -32,15 +32,18 @@ The VPS has a single Cloudflare Tunnel. Its ID is stored in 1Password as `CF_TUN
 2. The wildcard ingress rule already routes it to Traefik
 3. Traefik routes based on the `Host()` label on the container
 
-### 1Password Secrets (project: vps, config: prod)
+### 1Password Secrets
 
-| Secret | What it is |
-|-|-|
-| `CF_API_TOKEN` | API token — Zone:Read + DNS:Edit (all zones) + Tunnel:Edit (all accounts). Passed to Traefik as `CF_DNS_API_TOKEN` (lego requires that name) |
-| `CF_ACCOUNT_ID` | Cloudflare account ID (same for all zones/tunnels) |
-| `CF_ZONE_ID` | Zone ID for `DOMAIN` (jkrumm.com) |
-| `CF_TUNNEL_ID` | UUID of the VPS Cloudflare Tunnel |
-| `DOMAIN` | Primary domain |
+Shared bits live in **`common`** (HomeLab uses the same items). Per-server bits live in **`vps`**. HomeLab and VPS run separate tunnels — each has its own `TUNNEL_ID` and tunnel `TOKEN`, but they share API token + account + zone IDs.
+
+| Env var | 1Password ref | What it is |
+|-|-|-|
+| `CF_API_TOKEN` | `op://common/cloudflare/DNS_API_TOKEN` | API token — Zone:Read + DNS:Edit (all zones) + Tunnel:Edit. Passed to Traefik as `CF_DNS_API_TOKEN` (lego requires that name). |
+| `CF_ACCOUNT_ID` | `op://common/cloudflare/ACCOUNT_ID` | Account ID — same across all zones/tunnels. |
+| `CF_ZONE_ID` | `op://common/cloudflare/ZONE_ID_JKRUMM_COM` | Zone ID for `jkrumm.com`. Other zones (basalt-ui.com, rollhook.com, shutterflow.app) are looked up on demand. |
+| `CF_TUNNEL_ID` | `op://vps/cloudflare-tunnel/TUNNEL_ID` | **VPS** tunnel UUID (HomeLab's tunnel ID lives in `op://homelab/...`). |
+| `CLOUDFLARE_TUNNEL_TOKEN` | `op://vps/cloudflare-tunnel/TOKEN` | Per-server tunnel auth token. |
+| `DOMAIN` | `op://vps/config/DOMAIN` | Primary domain. |
 
 ### Multi-Domain / Multi-Zone Support
 

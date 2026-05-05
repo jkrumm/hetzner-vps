@@ -2,7 +2,12 @@
 # Usage: op run --env-file=.env.tpl -- docker compose up -d
 
 # --- Cloudflare ---
+# Token + account + primary zone ID live in `common` — shared with HomeLab.
+# Tunnel token + tunnel ID are per-server.
 CF_API_TOKEN=op://common/cloudflare/DNS_API_TOKEN
+CF_ACCOUNT_ID=op://common/cloudflare/ACCOUNT_ID
+CF_ZONE_ID=op://common/cloudflare/ZONE_ID_JKRUMM_COM
+CF_TUNNEL_ID=op://vps/cloudflare-tunnel/TUNNEL_ID
 CLOUDFLARE_TUNNEL_TOKEN=op://vps/cloudflare-tunnel/TOKEN
 
 # --- Postgres ---

@@ -68,11 +68,11 @@ Key variables:
 |-|-|
 | `DOMAIN` | Traefik labels (wildcard cert: `*.DOMAIN`) |
 | `ACME_EMAIL` | `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on Traefik |
-| `CF_API_TOKEN` | Cloudflare API token — needs DNS:Edit + Tunnel:Edit. Passed to Traefik as `CF_DNS_API_TOKEN` (lego expects that name) |
-| `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared tunnel auth (from Cloudflare dashboard) |
-| `CF_ACCOUNT_ID` | Cloudflare account ID — used by `scripts/cf-tunnel-ingress.sh` and `/cloudflare` skill |
-| `CF_ZONE_ID` | Zone ID for `DOMAIN` — used by `scripts/cf-tunnel-ingress.sh` |
-| `CF_TUNNEL_ID` | VPS tunnel UUID — used by `scripts/cf-tunnel-ingress.sh` |
+| `CF_API_TOKEN` | `op://common/cloudflare/DNS_API_TOKEN` — DNS:Edit + Tunnel:Edit. Passed to Traefik as `CF_DNS_API_TOKEN` (lego expects that name). Same token as HomeLab |
+| `CF_ACCOUNT_ID` | `op://common/cloudflare/ACCOUNT_ID` — same across all zones/tunnels |
+| `CF_ZONE_ID` | `op://common/cloudflare/ZONE_ID_JKRUMM_COM` — primary zone; other zones looked up on demand |
+| `CLOUDFLARE_TUNNEL_TOKEN` | `op://vps/cloudflare-tunnel/TOKEN` — per-server tunnel auth |
+| `CF_TUNNEL_ID` | `op://vps/cloudflare-tunnel/TUNNEL_ID` — VPS tunnel UUID (HomeLab has its own tunnel) |
 | `POSTGRES_DB/USER/PASSWORD` | Postgres container + backup script |
 | `MARIADB_DB`, `MARIADB_ROOT_PASSWORD`, `MARIADB_FPP_PASSWORD` | FPP MariaDB (`apps/fpp/compose.yml` + setup/backup/restore scripts) |
 | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` | `apps/fpp/scripts/backup-mariadb.sh` (separate monitor from pg-backup) |
