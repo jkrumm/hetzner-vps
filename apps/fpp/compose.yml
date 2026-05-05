@@ -1,0 +1,65 @@
+---
+# Free Planning Poker — single-tenant stack (MariaDB now; fpp-server + fpp-analytics later).
+#
+# This compose lives in apps/fpp/ on purpose: MariaDB is exposed on a public port
+# so Vercel can reach it. That breaks the repo-wide "no inbound ports" invariant,
+# so the deviation is quarantined here rather than poisoning compose.infra.yml.
+# See ../../CLAUDE.md → Security Invariants for the documented exception.
+#
+# Bootstrap order on a fresh server:
+#   1. make networking-up           (Traefik gets *.${DOMAIN} cert via DNS-01)
+#   2. make fpp-cert-sync           (extracts wildcard cert into apps/fpp/certs/)
+#   3. make fpp-up                  (MariaDB starts, refuses to start without certs)
+#   4. make fpp-mariadb-setup       (provisions fpp user + grants)
+
+networks:
+  mariadb-net:
+    external: true
+
+volumes:
+  mariadb-data:
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: mariadb
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DB}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    command: >
+      --require-secure-transport=ON
+      --ssl-cert=/etc/mysql/certs/cert.pem
+      --ssl-key=/etc/mysql/certs/key.pem
+      --max-connections=200
+      --innodb-buffer-pool-size=1G
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    # Public exposure for Vercel. Cloudflare Tunnel can't proxy raw MySQL protocol
+    # (TCP origins require cloudflared/WARP client; Spectrum is Enterprise-only).
+    # Mitigations: TLS required (--require-secure-transport), schema-scoped fpp user,
+    # fail2ban on auth failures, no remote root. DNS-only A record fpp-db.${DOMAIN}.
+    ports:
+      - "33306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./certs:/etc/mysql/certs:ro
+    networks:
+      - mariadb-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Watchtower: excluded from auto-updates — MariaDB is stateful, update manually.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    # journald (not json-file) so fail2ban can watch auth failures via systemd backend.
+    # Tag 'mariadb' is matched by /etc/fail2ban/jail.d/mariadb.conf.
+    logging:
+      driver: journald
+      options:
+        tag: mariadb

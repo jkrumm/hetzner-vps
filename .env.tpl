@@ -10,6 +10,11 @@ POSTGRES_DB=op://vps/config/POSTGRES_DB
 POSTGRES_USER=op://vps/config/POSTGRES_USER
 POSTGRES_PASSWORD=op://vps/postgres/PASSWORD
 
+# --- MariaDB (FPP — exposed on :33306 for Vercel, see apps/fpp/) ---
+MARIADB_DB=op://vps/config/MARIADB_DB
+MARIADB_ROOT_PASSWORD=op://vps/mariadb/ROOT_PASSWORD
+MARIADB_FPP_PASSWORD=op://vps/mariadb/FPP_PASSWORD
+
 # --- Services ---
 UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD
 UMAMI_APP_SECRET=op://vps/umami/APP_SECRET
@@ -31,6 +36,7 @@ ZOT_PASSWORD=op://common/zot/PASSWORD
 
 # --- Monitoring ---
 UPTIME_KUMA_PUSH_URL=op://vps/config/UPTIME_KUMA_PUSH_URL
+UPTIME_KUMA_FPP_BACKUP_PUSH_URL=op://vps/config/UPTIME_KUMA_FPP_BACKUP_PUSH_URL
 
 # --- Network config ---
 VPS_TAILSCALE_IP=op://vps/config/VPS_TAILSCALE_IP

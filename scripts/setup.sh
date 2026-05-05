@@ -238,7 +238,9 @@ fi
 # =============================================================================
 
 # make — required for Makefile targets
-apt-get install -y -qq make
+# jq — used by apps/fpp/scripts/cert-sync.sh to parse traefik/acme.json
+# fail2ban — bans repeated MariaDB auth failures (apps/fpp/fail2ban/)
+apt-get install -y -qq make jq fail2ban
 
 # AWS CLI v2 (for S3 backup uploads) — official installer from awscli.amazonaws.com
 if command -v aws &>/dev/null; then
@@ -292,7 +294,7 @@ fi
 # 10. Create Docker external networks
 # =============================================================================
 log "Creating Docker networks..."
-for network in proxy postgres-net valkey-net monitoring-net; do
+for network in proxy postgres-net valkey-net monitoring-net mariadb-net; do
   if docker network inspect "${network}" &>/dev/null; then
     skip "Network ${network} already exists"
   else
@@ -317,12 +319,32 @@ chmod 600 "${ACME_JSON}"
 chown "${DEPLOY_USER}:${DEPLOY_USER}" "${ACME_JSON}"
 
 # =============================================================================
-# 12. Install cron job for pg_dump backup
+# 12. Install cron jobs (Postgres backup, MariaDB backup, MariaDB cert sync)
 # =============================================================================
-log "Installing pg_backup cron job..."
-cp "${REPO_DIR}/cron/pg-backup" /etc/cron.d/pg-backup
-chmod 644 /etc/cron.d/pg-backup
-chown root:root /etc/cron.d/pg-backup
+log "Installing cron jobs..."
+for cronfile in pg-backup fpp-mariadb-backup fpp-cert-sync; do
+  cp "${REPO_DIR}/cron/${cronfile}" "/etc/cron.d/${cronfile}"
+  chmod 644 "/etc/cron.d/${cronfile}"
+  chown root:root "/etc/cron.d/${cronfile}"
+done
+
+# =============================================================================
+# 13. fail2ban for MariaDB (auth failures via journald → DOCKER-USER chain)
+# Only effective once apps/fpp/compose.yml is up (mariadb container logs to
+# journald with CONTAINER_TAG=mariadb).
+# =============================================================================
+log "Installing fail2ban configs for MariaDB..."
+cp "${REPO_DIR}/apps/fpp/fail2ban/filter-mariadb-auth.conf" /etc/fail2ban/filter.d/mariadb-auth.conf
+cp "${REPO_DIR}/apps/fpp/fail2ban/jail-mariadb.conf"        /etc/fail2ban/jail.d/mariadb.conf
+chmod 644 /etc/fail2ban/filter.d/mariadb-auth.conf /etc/fail2ban/jail.d/mariadb.conf
+systemctl enable fail2ban
+systemctl restart fail2ban
+
+# =============================================================================
+# 14. Bootstrap apps/fpp/certs/ — owned by deploy user so cert-sync.sh can write
+# =============================================================================
+mkdir -p "${REPO_DIR}/apps/fpp/certs"
+chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${REPO_DIR}/apps/fpp"
 
 # =============================================================================
 # Done
@@ -339,7 +361,13 @@ log " 3. Set 1Password SA:     Add OP_SERVICE_ACCOUNT_TOKEN to /home/${DEPLOY_US
 log "                          source ~/.bashrc && op vault list (verify access)"
 log " 4. Cloudflare Tunnel:    Token already in 1Password (vps/cloudflare-tunnel)"
 log " 5. UFW status:            ufw status verbose"
-log "                          Configure provider-level firewall (zero inbound) via hosting panel"
-log " 6. Start all stacks:     make up"
-log "                          (networking → infra → monitoring in order)"
+log "                          Note: Docker bypasses UFW for published ports — TCP 33306 (MariaDB)"
+log "                          becomes reachable on the public IP as soon as 'make fpp-up' runs."
+log "                          fail2ban handles auth-failure bans via the DOCKER-USER chain."
+log " 6. Start networking:     make networking-up   (issues *.\${DOMAIN} cert via DNS-01)"
+log " 7. Sync TLS cert:        make fpp-cert-sync   (extracts wildcard cert for MariaDB)"
+log " 8. Start all stacks:     make up"
+log "                          (networking → infra → monitoring → fpp in order)"
+log " 9. Provision DBs:        make postgres-setup && make fpp-mariadb-setup"
+log "10. DNS A record:         db.\${DOMAIN} → VPS public IP (DNS-only / grey cloud)"
 log "============================================================"

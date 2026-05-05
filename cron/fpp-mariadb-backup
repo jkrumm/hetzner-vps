@@ -1,0 +1,6 @@
+# MariaDB daily backup — 03:30 (offset from pg-backup at 03:00)
+# Install: cp cron/fpp-mariadb-backup /etc/cron.d/fpp-mariadb-backup && chmod 644 /etc/cron.d/fpp-mariadb-backup
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+30 3 * * * jkrumm cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/apps/fpp/scripts/backup-mariadb.sh >> /home/jkrumm/fpp-mariadb-backup.log 2>&1

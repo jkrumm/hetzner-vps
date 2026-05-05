@@ -31,6 +31,26 @@ services:
     volumes:
       - valkey-dev-data:/data
 
+  # FPP MariaDB — dev only (no TLS, default port). Prod compose at apps/fpp/compose.yml.
+  mariadb:
+    image: mariadb:11.4
+    container_name: mariadb
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DB}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb-dev-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # ---------------------------------------------------------------------------
   # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
   # UI: http://hyperdx.local (configure via localias)
@@ -56,6 +76,7 @@ services:
 volumes:
   postgres-dev-data:
   valkey-dev-data:
+  mariadb-dev-data:
   clickstack-db:
   clickstack-ch-data:
   clickstack-ch-logs:

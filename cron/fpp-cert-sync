@@ -1,0 +1,7 @@
+# MariaDB TLS cert sync from traefik/acme.json — every 6 hours at :17
+# Detects renewals (Traefik renews ~30 days before expiry) and FLUSH SSL into the running container.
+# Install: cp cron/fpp-cert-sync /etc/cron.d/fpp-cert-sync && chmod 644 /etc/cron.d/fpp-cert-sync
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+17 */6 * * * jkrumm cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/apps/fpp/scripts/cert-sync.sh >> /home/jkrumm/fpp-cert-sync.log 2>&1
