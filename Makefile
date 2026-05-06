@@ -50,6 +50,17 @@ fpp-cert-sync:
 ## so RollHook has running containers to authorize OIDC deploys against. Re-runnable.
 fpp-bootstrap-images:
 	$(OP_RUN) ./apps/fpp/scripts/bootstrap-images.sh
+## Materialize apps/fpp/.env from apps/fpp/.env.tpl (via `op inject`). Required so
+## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
+## can resolve ${VAR} interpolations in apps/fpp/compose.yml. Re-run after secret
+## rotation. The resulting .env is chmod 600, gitignored, and stays on VPS.
+fpp-env:
+	op inject -i apps/fpp/.env.tpl -o apps/fpp/.env -f
+	chmod 644 apps/fpp/.env
+	@echo "Wrote apps/fpp/.env (chmod 644, gitignored)"
+	@echo "Note: 644 is required because the RollHook container runs as a"
+	@echo "non-root user whose uid doesn't match the host's jkrumm uid."
+	@echo "VPS has no other shell users so the local-readability risk is bounded."
 fpp-backup:
 	@[ "$(ENV)" = "prod" ] || { echo "ERROR: backup requires ENV=prod"; exit 1; }
 	$(OP_RUN) ./apps/fpp/scripts/backup-mariadb.sh

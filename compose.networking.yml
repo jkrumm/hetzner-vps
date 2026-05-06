@@ -157,6 +157,10 @@ services:
       IMAGES: 1
       INFO: 1
       POST: 1
+      # docker compose up --scale needs to inspect/attach named volumes (e.g. the
+      # fpp-analytics-data volume mounted by fpp-analytics). Without this the
+      # rollout step fails with "Request forbidden by administrative rules".
+      VOLUMES: 1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
