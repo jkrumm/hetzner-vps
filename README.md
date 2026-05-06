@@ -313,7 +313,7 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 | Variable | Value | How to get |
 |-|-|-|
 | `ROLLHOOK_SECRET` | `<generated>` | In 1Password: `vps/rollhook/SECRET` |
-| `ZOT_PASSWORD` | `<generated>` | In 1Password: `common/zot/PASSWORD` — used for `docker login registry.jkrumm.com` |
+| `ZOT_PASSWORD` | `<generated>` | In 1Password: `common/zot/PASSWORD` — used for `docker login rollhook.jkrumm.com` |
 
 ---
 

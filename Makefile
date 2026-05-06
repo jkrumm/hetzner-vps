@@ -46,6 +46,10 @@ fpp-mariadb-setup:
 	$(OP_RUN) ./apps/fpp/scripts/setup-mariadb.sh
 fpp-cert-sync:
 	$(OP_RUN) ./apps/fpp/scripts/cert-sync.sh
+## One-shot bootstrap — pushes :initial fpp-server/fpp-analytics images to rollhook.jkrumm.com
+## so RollHook has running containers to authorize OIDC deploys against. Re-runnable.
+fpp-bootstrap-images:
+	$(OP_RUN) ./apps/fpp/scripts/bootstrap-images.sh
 fpp-backup:
 	@[ "$(ENV)" = "prod" ] || { echo "ERROR: backup requires ENV=prod"; exit 1; }
 	$(OP_RUN) ./apps/fpp/scripts/backup-mariadb.sh

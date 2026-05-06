@@ -60,20 +60,20 @@ cd ~/SourceRoot/free-planning-poker
 
 # Auth to the registry (one-shot — only needed for bootstrap).
 ROLLHOOK_SECRET=$(op --account tkrumm read "op://vps/rollhook/SECRET")
-docker login registry.jkrumm.com -u rollhook --password-stdin <<< "$ROLLHOOK_SECRET"
+docker login rollhook.jkrumm.com -u rollhook --password-stdin <<< "$ROLLHOOK_SECRET"
 
 # Build + push fpp-server and fpp-analytics with an :initial tag.
-docker build -t registry.jkrumm.com/fpp-server:initial -f fpp-server/Dockerfile fpp-server
-docker push registry.jkrumm.com/fpp-server:initial
+docker build -t rollhook.jkrumm.com/fpp-server:initial -f fpp-server/Dockerfile fpp-server
+docker push rollhook.jkrumm.com/fpp-server:initial
 
-docker build -t registry.jkrumm.com/fpp-analytics:initial -f fpp-analytics/Dockerfile fpp-analytics
-docker push registry.jkrumm.com/fpp-analytics:initial
+docker build -t rollhook.jkrumm.com/fpp-analytics:initial -f fpp-analytics/Dockerfile fpp-analytics
+docker push rollhook.jkrumm.com/fpp-analytics:initial
 ```
 
 ### 1.3 Start the containers on the VPS
 
 ```bash
-ssh vps "cd ~/vps && IMAGE_TAG=registry.jkrumm.com/fpp-server:initial \
+ssh vps "cd ~/vps && IMAGE_TAG=rollhook.jkrumm.com/fpp-server:initial \
   ENV=prod make fpp-up"
 # This brings up mariadb, fpp-server, fpp-analytics, fpp-analytics-updater.
 # fpp-analytics-updater will retry the DB connection until cutover step 3 (restore).

@@ -81,7 +81,7 @@ Key variables:
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | fpp-analytics-updater 10-min sync heartbeat (separate Kuma monitor) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
-| `ZOT_PASSWORD` | Private registry auth (`docker login registry.jkrumm.com`) — in `common` vault |
+| `ZOT_PASSWORD` | Private registry auth (`docker login rollhook.jkrumm.com`) — in `common` vault |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |
@@ -229,8 +229,8 @@ mysql://fpp:<password>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUn
 
 | Service | Image | Network | Deploy |
 |-|-|-|-|
-| `fpp-server` | `registry.jkrumm.com/fpp-server:latest` | `proxy` | RollHook on push to master |
-| `fpp-analytics` | `registry.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
+| `fpp-server` | `rollhook.jkrumm.com/fpp-server:latest` | `proxy` | RollHook on push to master |
+| `fpp-analytics` | `rollhook.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
 | `fpp-analytics-updater` | same as fpp-analytics | `mariadb-net` | manual `docker compose up -d` after image change |
 
 Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.${DOMAIN}` doesn't match the `mariadb` hostname). See `apps/fpp/MIGRATION.md` for the bootstrap and cutover runbook.

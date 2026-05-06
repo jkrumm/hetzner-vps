@@ -17,7 +17,7 @@
 #   2. make fpp-cert-sync           (extracts wildcard cert into apps/fpp/certs/)
 #   3. make fpp-up                  (MariaDB starts, refuses to start without certs)
 #   4. make fpp-mariadb-setup       (provisions fpp user + grants)
-#   5. Manual one-shot: docker login registry.jkrumm.com, build+push initial
+#   5. Manual one-shot: docker login rollhook.jkrumm.com, build+push initial
 #      fpp-server / fpp-analytics images so the registry has something to pull.
 #      See apps/fpp/MIGRATION.md → Bootstrap section.
 
@@ -81,7 +81,7 @@ services:
   # Traefik. Deployed via RollHook on push to jkrumm/free-planning-poker:master.
   # ---------------------------------------------------------------------------
   fpp-server:
-    image: ${IMAGE_TAG:-registry.jkrumm.com/fpp-server:latest}
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/fpp-server:latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -123,7 +123,7 @@ services:
   # written by fpp-analytics-updater. Public via Traefik. RollHook-managed.
   # ---------------------------------------------------------------------------
   fpp-analytics:
-    image: ${IMAGE_TAG:-registry.jkrumm.com/fpp-analytics:latest}
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/fpp-analytics:latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -175,10 +175,19 @@ services:
   # internal network. Vercel uses fpp-db.${DOMAIN}:33306 with full verify.
   # ---------------------------------------------------------------------------
   fpp-analytics-updater:
-    image: registry.jkrumm.com/fpp-analytics:latest
+    # Separate image name (same content as fpp-analytics) so RollHook's
+    # FindMatchingContainer doesn't conflate the two services when deploying
+    # fpp-analytics — Discover would otherwise return the first match by
+    # bare-name and could pick the updater (which has no allowed_repos label).
+    image: rollhook.jkrumm.com/fpp-analytics-updater:latest
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Inherits Dockerfile's HEALTHCHECK (probes :5100), which makes no sense for
+    # the sleep-loop sidecar — disable it explicitly so docker reports "running"
+    # instead of "unhealthy".
+    healthcheck:
+      disable: true
     entrypoint: ["sh", "-c", "while true; do python update_readmodel.py; sleep 600; done"]
     environment:
       LOG_LEVEL: INFO
