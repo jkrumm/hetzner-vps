@@ -2,30 +2,37 @@
 
 Cutover from the old SDS Hetzner VPS to this VPS. Order matters — read top to bottom.
 
-Acceptable downtime: **~5 minutes write-locked + 2-3 minutes total perceived outage** while DNS propagates and Vercel picks up the new `DATABASE_URL`.
+Acceptable downtime: **~5 minutes write-locked + ~1 minute Vercel redeploy** — no DNS race, all `free-planning-poker.com` endpoints already point at the new VPS. Cutover collapses to a Vercel env flip.
 
 ---
 
 ## Architecture (after migration)
 
 ```
-            ┌────────────────────┐
-            │  Vercel (NextJS)   │  free-planning-poker.com
-            └──────────┬─────────┘
-                       │ mysql TLS (verify)
-                       ▼
-fpp-db.${DOMAIN}:33306 ──► VPS public IP ──► MariaDB (apps/fpp/compose.yml)
-                                                  ▲
-                                                  │ TLS no-verify (internal)
-                                                  │
-            ┌────────────────────┐                │
-            │ fpp-analytics-     │ ───────────────┘
-            │ updater (sidecar)  │   sync MariaDB → parquet every 10 min
-            └────────────────────┘
+                ┌────────────────────┐
+                │  Vercel (NextJS)   │  free-planning-poker.com  (apex, Vercel anycast)
+                └──────────┬─────────┘
+                           │ mysql TLS (rejectUnauthorized:true)
+                           ▼
+db.free-planning-poker.com:33306 ──► VPS public IP ──► MariaDB (apps/fpp/compose.yml)
+                                                              ▲
+                                                              │ TLS no-verify (internal)
+                                                              │
+                ┌────────────────────┐                        │
+                │ fpp-analytics-     │ ───────────────────────┘
+                │ updater (sidecar)  │   sync MariaDB → parquet every 10 min
+                └────────────────────┘
 
-Cloudflare Tunnel ──► Traefik ──► fpp-server.${DOMAIN}     (Bun WebSocket)
-                            └──► fpp-analytics.${DOMAIN}   (FastAPI)
+Cloudflare Tunnel ──► Traefik ──► server.free-planning-poker.com     (Bun WebSocket — fpp-server)
+                            └──► analytics.free-planning-poker.com   (FastAPI — fpp-analytics)
 ```
+
+`free-planning-poker.com` zone is hosted on Cloudflare (migrated from Porkbun). Vercel apex (`A 76.76.21.21`) stays grey-cloud so Vercel's edge handles caching as before. The three operational subdomains (`server`, `analytics`, `db`) are CF-managed:
+
+- `server` and `analytics` → orange-cloud CNAMEs to the VPS Cloudflare Tunnel (Traefik routes by Host).
+- `db` → grey-cloud A record to the VPS public IP (CF can't proxy raw MySQL on non-Enterprise plans).
+
+MariaDB serves the `*.free-planning-poker.com` wildcard cert (synced from Traefik's acme.json by `apps/fpp/scripts/cert-sync.sh`), so Vercel's strict-verify connect to `db.free-planning-poker.com` validates without overrides.
 
 Both `fpp-server` and `fpp-analytics` are deployed via **RollHook** (zero-downtime rolling deploys) on every push to `jkrumm/free-planning-poker:master`. Auth is GitHub Actions OIDC — no secrets in CI.
 
@@ -107,28 +114,30 @@ Push a no-op commit to `master`. Watch `.github/workflows/deploy.yml` complete b
 
 ## Phase 2 — Cutover (production)
 
-Aim for a low-traffic window. ~5 min write-locked + DNS propagation.
+Aim for a low-traffic window. ~5 min write-locked + Vercel redeploy. **No DNS flip during the window** — all `free-planning-poker.com` records already point at the new VPS (added during Phase 1 prep). The cutover is purely a data migration + Vercel env flip.
 
 ### 2.1 Pause writes on old SDS
 
 Either set FPP into maintenance mode (preferred) or kill the old `fpp-server` so no new sessions accept votes:
 
 ```bash
-ssh sds "cd ~/sideproject-docker-stack && docker compose stop fpp-server fpp-analytics-updater"
+ssh sideproject-docker-stack "cd ~/sideproject-docker-stack && docker compose stop fpp-server fpp-analytics-updater"
 ```
 
-### 2.2 Final dump from old SDS → S3
+### 2.2 Final dump from old SDS → VPS → S3
+
+SDS uses Doppler for secrets. Dump on SDS, transfer over Tailscale, push to S3 with a `cutover_` prefix so it's distinguishable from any earlier `presync_*` validation dump:
 
 ```bash
-ssh sds "cd ~/sideproject-docker-stack && docker exec mariadb mariadb-dump \
-  -u root -p\$DB_ROOT_PW \
-  --single-transaction --routines --triggers --events \
-  --databases free-planning-poker | gzip -9 > /tmp/fpp-cutover.sql.gz"
-ssh sds "aws s3 cp /tmp/fpp-cutover.sql.gz s3://jkrumm/backups/vps/mariadb/cutover_$(date +%Y%m%d_%H%M%S).sql.gz \
-  --endpoint-url <B2_ENDPOINT>"
-```
+# Dump on SDS (logical, version-tolerant — SDS is MariaDB 11.3, VPS is 11.4)
+ssh sideproject-docker-stack 'PW=$(doppler secrets get DB_ROOT_PW --plain -p sideproject-docker-stack -c prod) && docker exec -e MYSQL_PWD="$PW" mariadb mariadb-dump -u root --single-transaction --routines --triggers --events free-planning-poker | gzip -9 > /tmp/fpp-cutover.sql.gz'
 
-(Old SDS uses Doppler — adjust the credential injection accordingly.)
+# Transfer SDS → VPS over Tailscale
+ssh sideproject-docker-stack "cat /tmp/fpp-cutover.sql.gz" | ssh vps "cat > /tmp/fpp-cutover.sql.gz"
+
+# Push to S3 with cutover_<timestamp> prefix (uses VPS's existing AWS creds)
+ssh vps 'cd ~/vps && op run --env-file=.env.tpl -- bash -c "aws s3 cp /tmp/fpp-cutover.sql.gz s3://\$AWS_S3_BUCKET/backups/vps/mariadb/cutover_$(date +%Y%m%d_%H%M%S).sql.gz --endpoint-url \$AWS_S3_ENDPOINT"'
+```
 
 ### 2.3 Restore on new VPS
 
@@ -149,53 +158,48 @@ ssh vps "cd ~/vps && make fpp-mariadb-setup"
 If the master branch on this VPS includes new migrations not yet applied to the dump:
 
 ```bash
-# from a machine that can reach fpp-db.${DOMAIN}:33306
-DATABASE_URL='mysql://fpp:<password>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUnauthorized":true}' \
+# from a machine that can reach db.free-planning-poker.com:33306
+DATABASE_URL='mysql://fpp:<password>@db.free-planning-poker.com:33306/free-planning-poker?ssl={"rejectUnauthorized":true}' \
   npm run db:migrate
 ```
 
-### 2.5 Flip Vercel `DATABASE_URL`
+### 2.5 Flip Vercel environment variables
 
-Vercel dashboard → free-planning-poker project → Settings → Environment Variables → update `DATABASE_URL`:
+Vercel dashboard → free-planning-poker project → Settings → Environment Variables. Update **all four** (the new tokens were rotated when the new SERVER_SECRET / ANALYTICS_SECRET_TOKEN items landed in 1Password — Vercel was still pointing at the old SDS values until now):
 
-```
-mysql://fpp:<FPP_PASSWORD>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUnauthorized":true}
-```
+| Var | New value |
+|-|-|
+| `DATABASE_URL` | `mysql://fpp:<FPP_PASSWORD>@db.free-planning-poker.com:33306/free-planning-poker?ssl={"rejectUnauthorized":true}` |
+| WebSocket URL (likely `NEXT_PUBLIC_FPP_SERVER_URL` or similar) | `https://server.free-planning-poker.com` |
+| Analytics URL | `https://analytics.free-planning-poker.com` |
+| `FPP_SERVER_SECRET` | from `op://vps/fpp/SERVER_SECRET` |
+| `FPP_ANALYTICS_SECRET_TOKEN` | from `op://vps/fpp/ANALYTICS_SECRET_TOKEN` |
 
 `<FPP_PASSWORD>` from `op://vps/mariadb/FPP_PASSWORD`.
 
-Trigger a redeploy on Vercel.
+Trigger a redeploy on Vercel. Production cuts over to the new VPS the moment the Vercel deployment goes live.
 
-### 2.6 Flip CNAMEs from old SDS tunnel → new VPS tunnel
+### 2.6 Restart fpp-analytics-updater
 
-Use `/cloudflare` skill to **update** the DNS records (don't add new ones — these subdomains already exist pointing at the SDS tunnel).
-
-```
-fpp-server.${DOMAIN}    CNAME → ${VPS_TUNNEL_ID}.cfargotunnel.com   (proxied: true)
-fpp-analytics.${DOMAIN} CNAME → ${VPS_TUNNEL_ID}.cfargotunnel.com   (proxied: true)
-```
-
-### 2.7 Restart fpp-analytics-updater
-
-Now that MariaDB has data, kick the updater so the parquet files populate:
+Now that MariaDB has the post-cutover data, kick the updater so parquet files refresh:
 
 ```bash
-ssh vps "cd ~/vps && docker restart fpp-analytics-updater && docker logs --tail 50 -f fpp-analytics-updater"
+ssh vps "docker restart fpp-analytics-updater && docker logs --tail 50 -f fpp-analytics-updater"
 ```
 
 The first sync writes `fpp_*.parquet` under the `fpp-analytics-data` volume. fpp-analytics serves them from there.
 
-### 2.8 Smoke test
+### 2.7 Smoke test
 
 ```bash
-curl -sI https://free-planning-poker.com/                # frontend (Vercel)
-curl -s  https://fpp-server.${DOMAIN}/health             # WebSocket API
-curl -s  https://fpp-analytics.${DOMAIN}/health          # FastAPI
-# create a room via UI, vote, confirm Drizzle writes hit fpp-db.${DOMAIN}
+curl -sI https://free-planning-poker.com/                       # frontend (Vercel apex)
+curl -s  https://server.free-planning-poker.com/health          # WebSocket API
+curl -s  https://analytics.free-planning-poker.com/health       # FastAPI (should be "ok", no longer "degraded")
+# create a room via UI, vote, confirm rows land in MariaDB
 ssh vps "docker logs --since=5m mariadb 2>&1 | grep -i 'connect\|query' | tail -10"
 ```
 
-### 2.9 Resume writes
+### 2.8 Resume writes
 
 If you used maintenance mode in step 2.1, disable it now. Cutover complete.
 
