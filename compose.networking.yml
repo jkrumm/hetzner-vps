@@ -133,9 +133,13 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.dashboard.service=api@internal"
-      # Request wildcard cert via DNS-01 — Docker Compose substitutes ${DOMAIN} in labels ✓
+      # Request wildcard certs via DNS-01 — Docker Compose substitutes ${DOMAIN} in labels ✓
+      # Two wildcards: jkrumm.com (primary stack) + free-planning-poker.com (FPP public endpoints).
+      # Both zones live in the same CF account and the API token has DNS:Edit across them.
       - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
       - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
+      - "traefik.http.routers.dashboard.tls.domains[1].main=free-planning-poker.com"
+      - "traefik.http.routers.dashboard.tls.domains[1].sans=*.free-planning-poker.com"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

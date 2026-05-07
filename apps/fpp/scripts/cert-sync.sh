@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Sync wildcard *.${DOMAIN} certificate from Traefik's acme.json to
-# apps/fpp/certs/{cert.pem,key.pem} so MariaDB can serve TLS to Vercel.
+# Sync wildcard *.free-planning-poker.com certificate from Traefik's acme.json
+# to apps/fpp/certs/{cert.pem,key.pem} so MariaDB can serve TLS to Vercel.
 # On change: FLUSH SSL inside the running mariadb container (no restart needed).
+#
+# Public DB hostname is db.free-planning-poker.com — Vercel connects with strict
+# rejectUnauthorized:true so the served cert MUST cover that hostname. Internal
+# updater uses DB_SSL_VERIFY=false and doesn't care which wildcard we serve.
 #
 # Idempotent — exits cleanly if certificate is unchanged. Run via cron every 6h.
 #
-# Required env vars: DOMAIN, MARIADB_ROOT_PASSWORD
+# Required env vars: MARIADB_ROOT_PASSWORD
 # =============================================================================
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 ACME_JSON="${REPO_DIR}/traefik/acme.json"
 CERTS_DIR="${REPO_DIR}/apps/fpp/certs"
-
-: "${DOMAIN:?DOMAIN env var required}"
+CERT_DOMAIN="free-planning-poker.com"
 
 mkdir -p "${CERTS_DIR}"
 
@@ -25,13 +28,14 @@ if [[ ! -s "${ACME_JSON}" ]]; then
 fi
 
 # Traefik can store the wildcard cert as either the main domain or as a SAN
-# under another cert (e.g. main=jkrumm.com, sans=["*.jkrumm.com"]). Match both.
+# under another cert (e.g. main=free-planning-poker.com, sans=["*.free-planning-poker.com"]).
+# Match both.
 JQ_SELECT='.letsencrypt.Certificates[] | select(([.domain.main] + (.domain.sans // [])) | index($d))'
-cert_b64=$(jq -r --arg d "*.${DOMAIN}" "${JQ_SELECT} | .certificate" "${ACME_JSON}")
-key_b64=$(jq -r --arg d "*.${DOMAIN}" "${JQ_SELECT} | .key"         "${ACME_JSON}")
+cert_b64=$(jq -r --arg d "*.${CERT_DOMAIN}" "${JQ_SELECT} | .certificate" "${ACME_JSON}")
+key_b64=$(jq -r --arg d "*.${CERT_DOMAIN}" "${JQ_SELECT} | .key"         "${ACME_JSON}")
 
 if [[ -z "${cert_b64}" || "${cert_b64}" == "null" ]]; then
-  echo "ERROR: wildcard certificate for *.${DOMAIN} not found in ${ACME_JSON}." >&2
+  echo "ERROR: wildcard certificate for *.${CERT_DOMAIN} not found in ${ACME_JSON}." >&2
   echo "Check Traefik logs and ensure the wildcard router has TLS enabled." >&2
   exit 1
 fi
