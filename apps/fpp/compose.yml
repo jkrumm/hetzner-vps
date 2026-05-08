@@ -99,9 +99,7 @@ services:
       retries: 5
     labels:
       - "traefik.enable=true"
-      # Accept both the legacy jkrumm.com hostname and the new free-planning-poker.com one.
-      # Cutover = Vercel env flip; both keep working until we explicitly drop fpp-server.${DOMAIN}.
-      - "traefik.http.routers.fpp-server.rule=Host(`fpp-server.${DOMAIN}`) || Host(`server.free-planning-poker.com`)"
+      - "traefik.http.routers.fpp-server.rule=Host(`server.free-planning-poker.com`)"
       - "traefik.http.routers.fpp-server.entrypoints=websecure"
       - "traefik.http.routers.fpp-server.tls.certresolver=letsencrypt"
       - "traefik.http.services.fpp-server.loadbalancer.server.port=3003"
@@ -149,8 +147,7 @@ services:
       retries: 5
     labels:
       - "traefik.enable=true"
-      # Accept both the legacy jkrumm.com hostname and the new free-planning-poker.com one.
-      - "traefik.http.routers.fpp-analytics.rule=Host(`fpp-analytics.${DOMAIN}`) || Host(`analytics.free-planning-poker.com`)"
+      - "traefik.http.routers.fpp-analytics.rule=Host(`analytics.free-planning-poker.com`)"
       - "traefik.http.routers.fpp-analytics.entrypoints=websecure"
       - "traefik.http.routers.fpp-analytics.tls.certresolver=letsencrypt"
       - "traefik.http.services.fpp-analytics.loadbalancer.server.port=5100"
