@@ -7,7 +7,7 @@ OP_RUN = op run --env-file=.env.tpl --
 
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-backup fpp-restore fpp-shell \
-        bun-email-api-up bun-email-api-down bun-email-api-env \
+        bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         postgres-setup ps backup firewall shell-postgres
 
 ## All stacks — adapts to ENV (dev: compose.dev.yml, prod: ordered stack sequence)
@@ -77,6 +77,11 @@ fpp-shell:
 ## Stateless, no DB. RollHook deploys on push to jkrumm/bun-email-api:master.
 bun-email-api-up:    ; $(OP_RUN) docker compose -f apps/bun-email-api/compose.yml up -d
 bun-email-api-down:  ; $(OP_RUN) docker compose -f apps/bun-email-api/compose.yml down
+## One-shot bootstrap — clone bun-email-api repo, build, and push :initial to
+## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
+## deploys against. Re-runnable.
+bun-email-api-bootstrap-image:
+	$(OP_RUN) ./apps/bun-email-api/scripts/bootstrap-image.sh
 ## Materialize apps/bun-email-api/.env from .env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
 ## can resolve ${VAR} interpolations in apps/bun-email-api/compose.yml. Re-run
