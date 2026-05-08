@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-: "${ZOT_PASSWORD:?ZOT_PASSWORD not set — run via 'make bun-email-api-bootstrap-image'}"
+: "${ROLLHOOK_SECRET:?ROLLHOOK_SECRET not set — run via 'make bun-email-api-bootstrap-image'}"
 
 REGISTRY="rollhook.jkrumm.com"
 SRC_DIR="${BEA_SRC_DIR:-/tmp/bun-email-api-bootstrap}"
@@ -27,7 +27,7 @@ else
 fi
 
 echo "[2/4] docker login ${REGISTRY}"
-echo "${ZOT_PASSWORD}" | docker login "${REGISTRY}" -u rollhook --password-stdin
+echo "${ROLLHOOK_SECRET}" | docker login "${REGISTRY}" -u rollhook --password-stdin
 
 echo "[3/4] Build ${REGISTRY}/bun-email-api:initial"
 docker build \
