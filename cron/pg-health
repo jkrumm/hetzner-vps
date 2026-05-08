@@ -1,0 +1,11 @@
+# PostgreSQL liveness — every minute
+# Runs as deploy user with 1Password-injected environment.
+# Install: cp cron/pg-health /etc/cron.d/pg-health && chmod 644 /etc/cron.d/pg-health
+#
+# bash -c '. ~/.bashrc; ...' is required so cron picks up OP_SERVICE_ACCOUNT_TOKEN
+# from the user's bashrc — cron runs with an empty environment otherwise and
+# `op run` fails with "No accounts configured for use with 1Password CLI".
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+* * * * * jkrumm /bin/bash -c '. /home/jkrumm/.bashrc; cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/scripts/health-pg.sh' >> /home/jkrumm/pg-health.log 2>&1

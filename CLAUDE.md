@@ -81,6 +81,7 @@ Key variables:
 | `BEA_SECRET_KEY`, `BEA_RESEND_API_KEY`, `BEA_RECEIVER_EMAIL` | bun-email-api (`apps/bun-email-api/compose.yml`). `SECRET_KEY` is the same bearer token as `FPP_BEA_SECRET_KEY` (consumer side) |
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | fpp-analytics-updater 10-min sync heartbeat (separate Kuma monitor) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
+| `UPTIME_KUMA_POSTGRES_PUSH_URL` | `scripts/health-pg.sh` — per-minute Postgres liveness heartbeat (separate monitor from pg-backup) |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
 | `ZOT_PASSWORD` | Private registry auth (`docker login rollhook.jkrumm.com`) — in `common` vault |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
@@ -179,9 +180,11 @@ traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed 
 scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron, fail2ban)
 scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
+scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
 scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
 cron/pg-backup                Postgres backup, daily 03:00
+cron/pg-health                Postgres liveness heartbeat, every minute
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
