@@ -7,6 +7,7 @@ OP_RUN = op run --env-file=.env.tpl --
 
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-backup fpp-restore fpp-shell \
+        bun-email-api-up bun-email-api-down bun-email-api-env \
         postgres-setup ps backup firewall shell-postgres
 
 ## All stacks — adapts to ENV (dev: compose.dev.yml, prod: ordered stack sequence)
@@ -16,12 +17,14 @@ ifeq ($(ENV),prod)
 	$(MAKE) infra-up
 	$(MAKE) monitoring-up
 	$(MAKE) fpp-up
+	$(MAKE) bun-email-api-up
 else
 	$(OP_RUN) docker compose -f compose.dev.yml up -d
 endif
 
 down:
 ifeq ($(ENV),prod)
+	$(MAKE) bun-email-api-down
 	$(MAKE) fpp-down
 	$(MAKE) monitoring-down
 	$(MAKE) infra-down
@@ -69,6 +72,19 @@ fpp-restore:
 	$(OP_RUN) ./apps/fpp/scripts/restore-mariadb.sh
 fpp-shell:
 	$(OP_RUN) sh -c 'docker exec -it -e MYSQL_PWD="$$MARIADB_ROOT_PASSWORD" mariadb mariadb -u root "$$MARIADB_DB"'
+
+## bun-email-api stack (Bun + Resend, RollHook-managed) — apps/bun-email-api/compose.yml
+## Stateless, no DB. RollHook deploys on push to jkrumm/bun-email-api:master.
+bun-email-api-up:    ; $(OP_RUN) docker compose -f apps/bun-email-api/compose.yml up -d
+bun-email-api-down:  ; $(OP_RUN) docker compose -f apps/bun-email-api/compose.yml down
+## Materialize apps/bun-email-api/.env from .env.tpl (via `op inject`). Required so
+## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
+## can resolve ${VAR} interpolations in apps/bun-email-api/compose.yml. Re-run
+## after rotating BEA secrets. Resulting .env is chmod 644 and gitignored.
+bun-email-api-env:
+	op inject -i apps/bun-email-api/.env.tpl -o apps/bun-email-api/.env -f
+	chmod 644 apps/bun-email-api/.env
+	@echo "Wrote apps/bun-email-api/.env (chmod 644, gitignored)"
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:

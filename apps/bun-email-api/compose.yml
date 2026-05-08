@@ -1,0 +1,48 @@
+---
+# bun-email-api — Bun + Elysia + Resend. Sends FPP contact-form and
+# daily-analytics emails. Public via Cloudflare Tunnel + Traefik at
+# bun-email-api.${DOMAIN}. Deployed via RollHook on push to
+# jkrumm/bun-email-api:master. Stateless, no DB, no volumes.
+
+networks:
+  proxy:
+    external: true
+
+services:
+  bun-email-api:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/bun-email-api:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    environment:
+      NODE_ENV: production
+      BEA_SECRET_KEY: ${BEA_SECRET_KEY}
+      BEA_RESEND_API_KEY: ${BEA_RESEND_API_KEY}
+      BEA_RECEIVER_EMAIL: ${BEA_RECEIVER_EMAIL}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3010/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bun-email-api.rule=Host(`bun-email-api.${DOMAIN}`)"
+      - "traefik.http.routers.bun-email-api.entrypoints=websecure"
+      - "traefik.http.routers.bun-email-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.bun-email-api.loadbalancer.server.port=3010"
+      - "traefik.http.routers.bun-email-api.middlewares=rate-limit@file,security-headers@file"
+      # Active health check — Traefik stops routing to draining instance the
+      # moment the container's HEALTHCHECK flips unhealthy.
+      - "traefik.http.services.bun-email-api.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.bun-email-api.loadbalancer.healthcheck.interval=10s"
+      # Managed by RollHook — Watchtower must not interfere.
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys.
+      - "rollhook.allowed_repos=jkrumm/bun-email-api"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

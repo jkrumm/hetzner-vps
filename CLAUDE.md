@@ -78,6 +78,7 @@ Key variables:
 | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` | `apps/fpp/scripts/backup-mariadb.sh` (separate monitor from pg-backup) |
 | `FPP_SERVER_SECRET`, `FPP_SERVER_SENTRY_DSN` | fpp-server (Bun WebSocket) — see `apps/fpp/compose.yml` |
 | `FPP_ANALYTICS_SECRET_TOKEN`, `FPP_ANALYTICS_SENTRY_DSN`, `FPP_BEA_BASE_URL`, `FPP_BEA_SECRET_KEY` | fpp-analytics (FastAPI) + updater sidecar |
+| `BEA_SECRET_KEY`, `BEA_RESEND_API_KEY`, `BEA_RECEIVER_EMAIL` | bun-email-api (`apps/bun-email-api/compose.yml`). `SECRET_KEY` is the same bearer token as `FPP_BEA_SECRET_KEY` (consumer side) |
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | fpp-analytics-updater 10-min sync heartbeat (separate Kuma monitor) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
@@ -163,6 +164,7 @@ compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
+apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics emails. RollHook-managed.
 apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel); fpp-server + fpp-analytics later
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
 apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 + Uptime Kuma push ping
