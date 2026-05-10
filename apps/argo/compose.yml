@@ -1,0 +1,123 @@
+---
+# argo — personal stack (api + dashboard).
+#
+# Single host (argo.jkrumm.com), Tailscale-only via DNS-only A record → VPS Tailscale IP.
+# Two routers on the same host:
+#   PathPrefix(`/api`)  priority 100  → argo-api    (with stripprefix /api)
+#   default             priority 1    → argo-dashboard (nginx static SPA)
+#
+# Both deployed via RollHook from jkrumm/argo (push to master). Dashboard rebuild
+# embeds VITE_API_URL=https://argo.jkrumm.com/api at build time. API queries homelab
+# services over Tailscale (garmin-collector, docker socket-proxy-claude, uptime-kuma).
+#
+# Bootstrap order on a fresh server:
+#   1. make networking-up                       (Traefik gets *.${DOMAIN} cert via DNS-01)
+#   2. mkdir -p /var/lib/argo/data && scp homelab.db
+#   3. cf DNS: argo.jkrumm.com → ${VPS_TAILSCALE_IP} (grey cloud / DNS-only)
+#   4. push to jkrumm/argo:master → RollHook builds + deploys both services
+
+networks:
+  proxy:
+    external: true
+  socket-proxy-monitoring-net:
+    external: true
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # argo-api — Bun + Elysia. SQLite at /app/data (host-bind /var/lib/argo/data).
+  # Reads VPS docker via socket-proxy-monitoring; reads homelab docker via
+  # ${HOMELAB_TAILSCALE_IP}:2376 (socket-proxy-claude on homelab side).
+  # Reaches uptime-kuma via public https://uptime.jkrumm.com (socket.io).
+  # Reaches garmin-collector via https://garmin.jkrumm.com (Tailscale-only).
+  # ---------------------------------------------------------------------------
+  argo-api:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/argo-api:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /app/data
+      API_SECRET: ${API_SECRET}
+      TICKTICK_API_KEY: ${TICKTICK_API_KEY}
+      UPTIME_KUMA_URL: https://uptime.jkrumm.com
+      UPTIME_KUMA_USERNAME: ${UPTIME_KUMA_USERNAME}
+      UPTIME_KUMA_PASSWORD: ${UPTIME_KUMA_PASSWORD}
+      UPTIME_KUMA_API_KEY: ${UPTIME_KUMA_API_KEY}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      SLACK_USER_TOKEN: ${SLACK_USER_TOKEN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # Garmin-collector lives on homelab (Tailscale-only public DNS).
+      GARMIN_COLLECTOR_URL: https://garmin.jkrumm.com
+      GARMIN_COLLECTOR_TOKEN: ${GARMIN_COLLECTOR_TOKEN}
+      # Garmin sync cron (added inside API). Used by API to call collector.
+      GARMIN_EMAIL: ${GARMIN_EMAIL}
+      # Docker socket proxies — VPS local + homelab over Tailscale.
+      DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
+      DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
+    volumes:
+      - /var/lib/argo/data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.argo-api.rule=Host(`argo.${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.argo-api.entrypoints=websecure"
+      - "traefik.http.routers.argo-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.argo-api.priority=100"
+      - "traefik.http.routers.argo-api.middlewares=argo-api-stripprefix,security-headers@file"
+      - "traefik.http.middlewares.argo-api-stripprefix.stripprefix.prefixes=/api"
+      - "traefik.http.services.argo-api.loadbalancer.server.port=4000"
+      - "traefik.http.services.argo-api.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.argo-api.loadbalancer.healthcheck.interval=10s"
+      # Managed by RollHook — Watchtower must not interfere.
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys.
+      - "rollhook.allowed_repos=jkrumm/argo"
+    networks:
+      - proxy
+      - socket-proxy-monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # argo-dashboard — Refine v5 SPA built with Vite, served by nginx.
+  # Static bundle, no runtime config. VITE_API_URL baked at build time.
+  # ---------------------------------------------------------------------------
+  argo-dashboard:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/argo-dashboard:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.argo-dashboard.rule=Host(`argo.${DOMAIN}`)"
+      - "traefik.http.routers.argo-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.argo-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.argo-dashboard.priority=1"
+      - "traefik.http.routers.argo-dashboard.middlewares=security-headers@file"
+      - "traefik.http.services.argo-dashboard.loadbalancer.server.port=80"
+      - "traefik.http.services.argo-dashboard.loadbalancer.healthcheck.path=/"
+      - "traefik.http.services.argo-dashboard.loadbalancer.healthcheck.interval=10s"
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "rollhook.allowed_repos=jkrumm/argo"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -7,7 +7,9 @@ OP_RUN = op run --env-file=.env.tpl --
 
 .PHONY: up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-backup fpp-restore fpp-shell \
+        fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
+        argo-up argo-down argo-env argo-bootstrap-image \
         postgres-setup ps backup firewall shell-postgres
 
 ## All stacks — adapts to ENV (dev: compose.dev.yml, prod: ordered stack sequence)
@@ -70,6 +72,14 @@ fpp-backup:
 fpp-restore:
 	@[ "$(ENV)" = "prod" ] || { echo "ERROR: restore requires ENV=prod"; exit 1; }
 	$(OP_RUN) ./apps/fpp/scripts/restore-mariadb.sh
+## Dev — pull latest (or BACKUP_FILE=...) S3 backup → local mariadb. Validates DR chain.
+fpp-restore-local:
+	@[ "$(ENV)" = "dev" ] || { echo "ERROR: fpp-restore-local requires ENV=dev"; exit 1; }
+	$(OP_RUN) ./apps/fpp/scripts/restore-mariadb-local.sh
+## Dev — fresh sync from prod mariadb over SSH (no S3). Re-runnable.
+fpp-sync-from-prod:
+	@[ "$(ENV)" = "dev" ] || { echo "ERROR: fpp-sync-from-prod requires ENV=dev"; exit 1; }
+	$(OP_RUN) ./apps/fpp/scripts/sync-mariadb-from-vps.sh
 fpp-shell:
 	$(OP_RUN) sh -c 'docker exec -it -e MYSQL_PWD="$$MARIADB_ROOT_PASSWORD" mariadb mariadb -u root "$$MARIADB_DB"'
 
@@ -90,6 +100,24 @@ bun-email-api-env:
 	op inject -i apps/bun-email-api/.env.tpl -o apps/bun-email-api/.env -f
 	chmod 644 apps/bun-email-api/.env
 	@echo "Wrote apps/bun-email-api/.env (chmod 644, gitignored)"
+
+## argo stack (api + dashboard, RollHook-managed) — apps/argo/compose.yml
+## Tailscale-only via DNS-only A record argo.jkrumm.com → ${VPS_TAILSCALE_IP}.
+## RollHook deploys on push to jkrumm/argo:master.
+argo-up:    ; $(OP_RUN) docker compose -f apps/argo/compose.yml --env-file apps/argo/.env up -d
+argo-down:  ; $(OP_RUN) docker compose -f apps/argo/compose.yml --env-file apps/argo/.env down
+## One-shot bootstrap — clone argo repo, build both images, push :initial to
+## rollhook.jkrumm.com so RollHook has running containers to authorize OIDC
+## deploys against. Re-runnable.
+argo-bootstrap-image:
+	$(OP_RUN) ./apps/argo/scripts/bootstrap-image.sh
+## Materialize apps/argo/.env from .env.tpl. Required so RollHook's
+## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
+## rotating any argo secret. Resulting .env is chmod 644 and gitignored.
+argo-env:
+	op inject -i apps/argo/.env.tpl -o apps/argo/.env -f
+	chmod 644 apps/argo/.env
+	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:
