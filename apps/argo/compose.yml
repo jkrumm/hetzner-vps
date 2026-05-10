@@ -21,6 +21,7 @@ networks:
     external: true
   socket-proxy-monitoring-net:
     external: true
+    name: vps_socket-proxy-monitoring-net
 
 services:
 
