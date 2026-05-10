@@ -28,6 +28,10 @@ make fpp-cert-sync           # extract *.${DOMAIN} cert for MariaDB TLS
 make fpp-backup              # manual mariadb-dump → S3
 make fpp-shell               # mariadb shell as root
 
+# Dev seeding from prod (ENV=dev — both gated)
+make fpp-restore-local       # pull latest S3 backup into local mariadb (validates DR chain)
+make fpp-sync-from-prod      # direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
+
 # Ops
 make firewall        # show UFW status
 

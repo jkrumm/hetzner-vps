@@ -31,7 +31,9 @@ services:
     volumes:
       - valkey-dev-data:/data
 
-  # FPP MariaDB — dev only (no TLS, default port). Prod compose at apps/fpp/compose.yml.
+  # FPP MariaDB — dev only (no TLS). Host port 13306 to avoid collisions with
+  # other local MySQL instances (e.g. work projects on 3306). Prod compose at
+  # apps/fpp/compose.yml binds 33306 publicly for Vercel.
   mariadb:
     image: mariadb:11.4
     container_name: mariadb
@@ -42,7 +44,7 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
     ports:
-      - "3306:3306"
+      - "13306:3306"
     volumes:
       - mariadb-dev-data:/var/lib/mysql
     healthcheck:

@@ -36,6 +36,8 @@ make fpp-shell           # mariadb shell (uses op run with .env.tpl)
 make backup              # manual pg_dump → S3 (prod only — guarded)
 make fpp-backup          # manual mariadb-dump → S3 (prod only — guarded)
 make fpp-restore         # interactive mariadb restore from S3 (prod only)
+make fpp-restore-local   # dev — pull latest S3 backup into local mariadb (DR drill / seed)
+make fpp-sync-from-prod  # dev — direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
 make firewall            # show UFW status and rules
 
 # Deploy config changes to server
@@ -170,6 +172,8 @@ apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
 apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 + Uptime Kuma push ping
 apps/fpp/scripts/restore-mariadb.sh  Restore from S3 (interactive confirmation, drops DB first)
+apps/fpp/scripts/restore-mariadb-local.sh  Dev — non-interactive S3 → local mariadb (DR validation + seeding)
+apps/fpp/scripts/sync-mariadb-from-vps.sh  Dev — ssh vps + docker exec mariadb-dump → local mariadb (fresh, no S3)
 apps/fpp/scripts/cert-sync.sh        Extract *.${DOMAIN} cert from traefik/acme.json + FLUSH SSL
 apps/fpp/fail2ban/                   filter + jail configs installed by setup.sh
 apps/fpp/certs/                      gitignored — populated by cert-sync.sh, mounted RO into mariadb
