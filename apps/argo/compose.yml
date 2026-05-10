@@ -54,8 +54,6 @@ services:
       # Garmin-collector lives on homelab (Tailscale-only public DNS).
       GARMIN_COLLECTOR_URL: https://garmin.jkrumm.com
       GARMIN_COLLECTOR_TOKEN: ${GARMIN_COLLECTOR_TOKEN}
-      # Garmin sync cron (added inside API). Used by API to call collector.
-      GARMIN_EMAIL: ${GARMIN_EMAIL}
       # Docker socket proxies — VPS local + homelab over Tailscale.
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
