@@ -11,7 +11,10 @@ Infrastructure-as-code for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubuntu 24.04
 Environment is controlled by `.env` (gitignored). Locally: `ENV=dev`. On server: `ENV=prod`.
 Secrets: `op run --env-file=.env.tpl` — 1Password vaults: `vps` + `common`.
 
+All container operations go through the Makefile — never raw `docker`/`docker compose` (global rule `docker-makefile.md`). Bare `make` prints an ENV-aware help: targets available in the current ENV are highlighted, prod-only / dev-only targets are listed dimmed under "Requires ENV=…". Prod-only and dev-only targets are gated by `require-prod` / `require-dev` prerequisites and refuse to run with the wrong ENV.
+
 ```bash
+make                     # show ENV-aware help (default target)
 # Primary operations — adapts to ENV automatically
 make up                  # dev: compose.dev.yml | prod: networking → infra → monitoring
 make down                # dev: compose.dev.yml | prod: reverse order
