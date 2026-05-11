@@ -13,6 +13,7 @@ OP_RUN = op run --env-file=.env.tpl --
         fpp-backup fpp-restore fpp-shell fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
+        photo-gallery-up photo-gallery-down \
         postgres-setup ps backup firewall shell-postgres prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
@@ -65,6 +66,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) monitoring-up
 	$(MAKE) fpp-up
 	$(MAKE) bun-email-api-up
+	$(MAKE) photo-gallery-up
 else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "→ Detected existing Redis/Valkey on :6379 — skipping the dev valkey service"; \
@@ -77,6 +79,7 @@ endif
 
 down:
 ifeq ($(ENV),prod)
+	$(MAKE) photo-gallery-down
 	$(MAKE) bun-email-api-down
 	$(MAKE) fpp-down
 	$(MAKE) monitoring-down
@@ -168,6 +171,14 @@ argo-env: require-prod
 	op inject -i apps/argo/.env.tpl -o apps/argo/.env -f
 	chmod 644 apps/argo/.env
 	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
+
+## photo-gallery stack — static Astro gallery served by nginx from a host volume.
+## Content lives at /home/jkrumm/photo-gallery-dist on the VPS; photo-flow CLI on the
+## developer laptop rsyncs the built dist/ there. No registry, no RollHook — the
+## container only serves files. First bring-up requires content already in place
+## (at minimum index.html) so the healthcheck can pass.
+photo-gallery-up:   require-prod ; $(OP_RUN) docker compose -f apps/photo-gallery/compose.yml up -d
+photo-gallery-down: require-prod ; $(OP_RUN) docker compose -f apps/photo-gallery/compose.yml down
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:

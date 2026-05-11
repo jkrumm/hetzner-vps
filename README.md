@@ -120,6 +120,7 @@ Docker API access — no direct docker.sock mounts:
 | socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |
 | socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | auto |
 | watchtower | containrrr/watchtower | Auto-updates containers, Pushover on failure | auto |
+| photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
 
 ---
 
@@ -223,7 +224,15 @@ Verify: `make ps` — all containers should be running within ~30 seconds.
 
 Add a DNS-only A record `fpp-db.${DOMAIN}` → VPS public IP (grey cloud, **not** proxied — Cloudflare can't proxy MySQL).
 
-### 9. Cloudflare tunnel ingress + DNS
+### 9. Photo gallery host directory
+
+```bash
+mkdir -p /home/jkrumm/photo-gallery-dist
+```
+
+Content (built Astro `dist/`) is rsynced from the developer laptop by the `photo-flow` CLI — see `~/SourceRoot/photo-flow`. Sync at least an `index.html` before `make photo-gallery-up` so the healthcheck passes.
+
+### 10. Cloudflare tunnel ingress + DNS
 
 Use the `/cloudflare` Claude Code skill to set the wildcard ingress rule and add DNS records. The skill handles all API calls via `ssh vps "op run --env-file=.env.tpl --"` — the token never leaves 1Password.
 

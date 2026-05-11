@@ -1,0 +1,47 @@
+# photo-gallery — static Astro photo gallery served by nginx from a host volume.
+#
+# Build + content flow lives on the developer's laptop (photo-flow CLI):
+#   photoflow sync-gallery → npm run build → rsync dist/ → /home/jkrumm/photo-gallery-dist
+#
+# This service just serves whatever is currently in that directory. No image
+# registry, no RollHook — content changes happen on the host filesystem, not
+# via container redeploys. The watchtower auto-update on nginx:alpine keeps the
+# server itself patched.
+#
+# First-time bring-up: rsync at least an `index.html` into the host directory
+# before `make photo-gallery-up`, otherwise nginx returns 403 and the
+# healthcheck fails until content lands.
+
+networks:
+  proxy:
+    external: true
+
+services:
+  photo-gallery:
+    image: nginx:alpine
+    container_name: photo-gallery
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.photo-gallery.rule=Host(`photos.${DOMAIN}`)"
+      - "traefik.http.routers.photo-gallery.entrypoints=websecure"
+      - "traefik.http.routers.photo-gallery.tls.certresolver=letsencrypt"
+      - "traefik.http.services.photo-gallery.loadbalancer.server.port=80"
+      - "traefik.http.routers.photo-gallery.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.photo-gallery.loadbalancer.healthcheck.path=/"
+      - "traefik.http.services.photo-gallery.loadbalancer.healthcheck.interval=30s"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
