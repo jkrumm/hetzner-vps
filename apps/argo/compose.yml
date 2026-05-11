@@ -19,6 +19,8 @@
 networks:
   proxy:
     external: true
+  postgres-net:
+    external: true
   socket-proxy-monitoring-net:
     external: true
     name: vps_socket-proxy-monitoring-net
@@ -57,6 +59,10 @@ services:
       # Docker socket proxies — VPS local + homelab over Tailscale.
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
+      # Shared VPS Postgres — own schema `argo`, schema-scoped user.
+      # SQLite stays mounted in parallel during the transition (argo repo
+      # decides which adapter to use at runtime).
+      DATABASE_URL: postgresql://argo:${ARGO_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=argo
     volumes:
       - /var/lib/argo/data:/app/data
     healthcheck:
@@ -82,6 +88,7 @@ services:
       - "rollhook.allowed_repos=jkrumm/argo"
     networks:
       - proxy
+      - postgres-net
       - socket-proxy-monitoring-net
     logging:
       driver: json-file
