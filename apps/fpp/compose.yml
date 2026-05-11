@@ -26,6 +26,10 @@ networks:
     external: true
   proxy:
     external: true
+  # Shared with compose.infra.yml — fpp-server uses Valkey for room state
+  # snapshots so an in-memory room survives a RollHook rolling restart.
+  valkey-net:
+    external: true
 
 volumes:
   mariadb-data:
@@ -91,6 +95,10 @@ services:
       TRPC_URL: https://free-planning-poker.com/api/trpc
       FPP_SERVER_SECRET: ${FPP_SERVER_SECRET}
       SENTRY_DSN: ${FPP_SERVER_SENTRY_DSN}
+      # Valkey for room state snapshots — survives RollHook rolling restart.
+      # No password (Valkey is on an internal-only Docker network). Unsetting
+      # this env var degrades gracefully to in-memory-only behavior.
+      REDIS_URL: redis://redis:6379
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3003/health"]
       interval: 5s
@@ -114,6 +122,7 @@ services:
       - "rollhook.allowed_repos=jkrumm/free-planning-poker"
     networks:
       - proxy
+      - valkey-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
