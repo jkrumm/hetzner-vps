@@ -106,6 +106,35 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA basalt_ui_playground GRANT ALL ON SEQUENCES T
 SQL
 
 # ---------------------------------------------------------------------------
+# argo — schema: argo, user: argo
+# ---------------------------------------------------------------------------
+echo "--> argo"
+
+psql_main <<SQL
+CREATE SCHEMA IF NOT EXISTS argo;
+
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'argo') THEN
+    CREATE ROLE argo WITH LOGIN PASSWORD '${ARGO_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE argo WITH PASSWORD '${ARGO_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO argo;
+-- Required for migration tools (drizzle-kit / prisma) that run CREATE SCHEMA IF NOT EXISTS
+-- internally — PG checks CREATE ON DATABASE before the IF NOT EXISTS short-circuit.
+GRANT CREATE ON DATABASE "${POSTGRES_DB}" TO argo;
+GRANT USAGE, CREATE ON SCHEMA argo TO argo;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA argo TO argo;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA argo TO argo;
+ALTER DEFAULT PRIVILEGES IN SCHEMA argo GRANT ALL ON TABLES TO argo;
+ALTER DEFAULT PRIVILEGES IN SCHEMA argo GRANT ALL ON SEQUENCES TO argo;
+SQL
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern
 # ---------------------------------------------------------------------------
 
