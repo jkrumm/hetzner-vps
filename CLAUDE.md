@@ -266,7 +266,6 @@ Current schemas:
 |-|-|-|
 | public | (main app / reserved) | ${POSTGRES_USER} |
 | umami | Umami analytics | umami |
-| watchdog | Watchdog | watchdog |
 | basalt_ui_playground | basalt-ui-playground | basalt_ui_playground |
 | argo | argo (api) | argo |
 

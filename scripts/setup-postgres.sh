@@ -51,32 +51,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA umami GRANT ALL ON SEQUENCES TO umami;
 SQL
 
 # ---------------------------------------------------------------------------
-# Watchdog — schema: watchdog, user: watchdog
-# ---------------------------------------------------------------------------
-echo "--> watchdog"
-
-psql_main <<SQL
-CREATE SCHEMA IF NOT EXISTS watchdog;
-
-DO \$\$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'watchdog') THEN
-    CREATE ROLE watchdog WITH LOGIN PASSWORD '${WATCHDOG_DB_PASSWORD}';
-  ELSE
-    ALTER ROLE watchdog WITH PASSWORD '${WATCHDOG_DB_PASSWORD}';
-  END IF;
-END
-\$\$;
-
-GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO watchdog;
-GRANT USAGE, CREATE ON SCHEMA watchdog TO watchdog;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA watchdog TO watchdog;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA watchdog TO watchdog;
-ALTER DEFAULT PRIVILEGES IN SCHEMA watchdog GRANT ALL ON TABLES TO watchdog;
-ALTER DEFAULT PRIVILEGES IN SCHEMA watchdog GRANT ALL ON SEQUENCES TO watchdog;
-SQL
-
-# ---------------------------------------------------------------------------
 # basalt-ui-playground — schema: basalt_ui_playground, user: basalt_ui_playground
 # ---------------------------------------------------------------------------
 echo "--> basalt_ui_playground"
