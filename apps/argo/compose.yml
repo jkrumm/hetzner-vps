@@ -11,15 +11,18 @@
 # services over Tailscale (garmin-collector, docker socket-proxy-claude, uptime-kuma).
 #
 # Bootstrap order on a fresh server:
-#   1. make networking-up                       (Traefik gets *.${DOMAIN} cert via DNS-01)
-#   2. mkdir -p /var/lib/argo/data && scp homelab.db
+#   1. make networking-up + monitoring-up        (Traefik cert + ClickStack for OTLP)
+#   2. make postgres-setup                       (creates argo role + schema)
 #   3. cf DNS: argo.jkrumm.com → ${VPS_TAILSCALE_IP} (grey cloud / DNS-only)
 #   4. push to jkrumm/argo:master → RollHook builds + deploys both services
+#   5. run argo data migration (see apps/api/scripts/migrate-sqlite-to-pg.ts)
 
 networks:
   proxy:
     external: true
   postgres-net:
+    external: true
+  monitoring-net:
     external: true
   socket-proxy-monitoring-net:
     external: true
@@ -28,9 +31,8 @@ networks:
 services:
 
   # ---------------------------------------------------------------------------
-  # argo-api — Bun + Elysia. SQLite at /app/data (host-bind /var/lib/argo/data).
-  # Reads VPS docker via socket-proxy-monitoring; reads homelab docker via
-  # ${HOMELAB_TAILSCALE_IP}:2376 (socket-proxy-claude on homelab side).
+  # argo-api — Bun + Elysia + Postgres. Reads VPS docker via socket-proxy-monitoring;
+  # reads homelab docker via ${HOMELAB_TAILSCALE_IP}:2376 (socket-proxy-claude).
   # Reaches uptime-kuma via public https://uptime.jkrumm.com (socket.io).
   # Reaches garmin-collector via https://garmin.jkrumm.com (Tailscale-only).
   # ---------------------------------------------------------------------------
@@ -60,9 +62,10 @@ services:
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
       # Shared VPS Postgres — own schema `argo`, schema-scoped user.
-      # SQLite stays mounted in parallel during the transition (argo repo
-      # decides which adapter to use at runtime).
       DATABASE_URL: postgresql://argo:${ARGO_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=argo
+      # OpenTelemetry — sends traces to ClickStack on monitoring-net.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4318
+      OTEL_SERVICE_NAME: argo-api
     volumes:
       - /var/lib/argo/data:/app/data
     healthcheck:
@@ -89,14 +92,15 @@ services:
     networks:
       - proxy
       - postgres-net
+      - monitoring-net
       - socket-proxy-monitoring-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
   # ---------------------------------------------------------------------------
-  # argo-dashboard — Refine v5 SPA built with Vite, served by nginx.
-  # Static bundle, no runtime config. VITE_API_URL baked at build time.
+  # argo-dashboard — Vite + React 19 + Mantine v9 SPA, served by nginx.
+  # Static bundle. VITE_API_URL + HyperDX vars baked at build time via rollhook.
   # ---------------------------------------------------------------------------
   argo-dashboard:
     image: ${IMAGE_TAG:-rollhook.jkrumm.com/argo-dashboard:latest}
