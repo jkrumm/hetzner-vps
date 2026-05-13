@@ -157,8 +157,40 @@ bun-email-api-env: require-prod
 ## argo stack (api + dashboard, RollHook-managed) — apps/argo/compose.yml
 ## Tailscale-only via DNS-only A record argo.jkrumm.com → ${VPS_TAILSCALE_IP}.
 ## RollHook deploys on push to jkrumm/argo:master.
-argo-up:   require-prod ; $(OP_RUN) docker compose -f apps/argo/compose.yml --env-file apps/argo/.env up -d
+##
+## argo-up: recreate containers WITHOUT pulling a new image. Reads the SHAs
+## of the currently-running containers and pins IMAGE_TAG to each. Use this
+## when you change apps/argo/compose.yml (labels, mounts, env) and need the
+## changes applied without bumping the running code. To deploy new code, use
+## `make argo-redeploy` (triggers RollHook via empty-commit push).
+##
+## Why this dance: RollHook tags pushed images by git SHA only — it does NOT
+## update the :latest tag. So a naive `docker compose up -d` would resolve
+## `${IMAGE_TAG:-...:latest}` and roll the running containers back to a stale
+## :latest. Pinning to the running image avoids that regression.
+argo-up: require-prod
+	@API_IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=argo-api' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	WEB_IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=argo-dashboard' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	if [ -z "$$API_IMG" ] || [ -z "$$WEB_IMG" ]; then \
+	  echo "  ✗ argo containers not running — bootstrap via 'make argo-bootstrap-image' then push to argo master to trigger RollHook"; \
+	  exit 1; \
+	fi; \
+	echo "  pinning argo-api      → $$API_IMG"; \
+	echo "  pinning argo-dashboard → $$WEB_IMG"; \
+	$(OP_RUN) ARGO_API_IMAGE=$$API_IMG ARGO_DASHBOARD_IMAGE=$$WEB_IMG docker compose -f apps/argo/compose.yml --env-file apps/argo/.env up -d
 argo-down: require-prod ; $(OP_RUN) docker compose -f apps/argo/compose.yml --env-file apps/argo/.env down
+
+## Trigger a fresh RollHook deploy by pushing an empty commit to argo's master.
+## RollHook detects the push, rebuilds both images at the new SHA, and rolling-
+## restarts the containers. Use this instead of `make argo-up` when you want
+## new code (or when you just want compose.yml changes safely applied via a
+## fresh build).
+argo-redeploy: require-dev
+	@if [ ! -d $$HOME/SourceRoot/argo ]; then echo "  ✗ argo repo not found at ~/SourceRoot/argo"; exit 1; fi
+	@cd $$HOME/SourceRoot/argo && \
+	  git commit --allow-empty -m "chore: redeploy (triggered via vps make argo-redeploy)" && \
+	  git push && \
+	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/argo/actions"
 ## One-shot bootstrap — clone argo repo, build both images, push :initial to
 ## rollhook.jkrumm.com so RollHook has running containers to authorize OIDC
 ## deploys against. Re-runnable.

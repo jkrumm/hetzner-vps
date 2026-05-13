@@ -114,7 +114,7 @@ Docker API access — no direct docker.sock mounts:
 | rollhook | ghcr.io/jkrumm/rollhook | Zero-downtime rolling deployments via webhook | auto |
 | postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
 | valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
-| clickstack | clickhouse/clickstack-all-in-one | Observability — OTel + ClickHouse + HyperDX UI | auto |
+| clickstack | clickhouse/clickstack-all-in-one | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) for the two-tier ingest design and how to add a service. | auto |
 | beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
 | dozzle | amir20/dozzle | Log streaming agent | auto |
 | socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |

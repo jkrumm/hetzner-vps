@@ -92,7 +92,7 @@ Key variables:
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |
-| `HYPERDX_API_KEY` | `op://vps/clickstack/HYPERDX_API_KEY_PROD` — ClickStack ingestion key, auth header on Traefik OTLP export |
+| `HYPERDX_API_KEY` | (no longer required by Traefik — see `docs/observability.md`. Browser SDKs still embed `op://vps/argo/HYPERDX_API_KEY_PROD` for the authed public ingress) |
 | `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.monitoring.yml` |
 | `UMAMI_APP_SECRET` | Umami session secret — 32+ char random string (`openssl rand -hex 32`) |
 | `BASALT_UI_PLAYGROUND_DB_PASSWORD` | basalt-ui-playground Postgres user password — `setup-postgres.sh` |
@@ -213,7 +213,15 @@ Makefile                      Operational shortcuts
 
 **Watchtower** — connects to Docker via `socket-proxy-watchtower` (TCP, not docker.sock). Dedicated proxy instance with `POST=1` (write access required for pull/recreate), isolated on `socket-proxy-watchtower-net` so Traefik's read-only proxy is unaffected. Auto-updates all containers except Postgres and Valkey (opted out via `com.centurylinklabs.watchtower.enable=false`). Slack #updates via shoutrrr at warn level (failures only). Runs daily at 04:00.
 
-**ClickStack** — all-in-one observability container (`clickhouse/clickstack-all-in-one`). Bundles ClickHouse, OTel Collector, HyperDX UI, and MongoDB. Apps on `monitoring-net` send OTLP to `clickstack:4318`. HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only via Traefik). OTel HTTP endpoint at `otel.DOMAIN` (public, for browser SDKs/session replay). Watchtower auto-updates. No auth needed for OTel ingestion; UI auth via first-visit account creation (persisted in internal MongoDB). Dev: `https://hyperdx.test` (via dotfiles Caddyfile + dnsmasq) or `http://localhost:7707` direct.
+**ClickStack** — all-in-one observability container (`clickhouse/clickstack-all-in-one`). Bundles ClickHouse, OTel Collector, HyperDX UI, and MongoDB. Two OTLP receivers:
+- `:4318` (authed via `bearertokenauth`) — for browser SDKs and any cross-host ingest. Reached publicly via `otel.DOMAIN` and per-app same-origin routes (e.g. `argo.DOMAIN/v1/traces` → `clickstack-otel@docker`).
+- `:4319` (no auth, docker-bridge only) — added via `clickstack/otel-custom.yaml` (merged into the base config). Used by Traefik and every internal monitoring-net service. The trust boundary is the docker network, not the bearer token. **Why two tiers**: Traefik 3.x has unfixed bugs around env-var substitution in OTLP headers — see `docs/observability.md`.
+
+HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only via Traefik). UI auth via first-visit account creation (persisted in internal MongoDB). Watchtower auto-updates. Dev: `https://hyperdx.test` (via dotfiles Caddyfile + dnsmasq) or `http://localhost:7707` direct.
+
+**Adding a service to the pipeline**: see `docs/observability.md` for the full
+runbook (one-line env addition for backend, four Traefik labels for frontend browser
+SDK ingest).
 
 **Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
 

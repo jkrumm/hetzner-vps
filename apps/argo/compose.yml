@@ -37,7 +37,10 @@ services:
   # Reaches garmin-collector via https://garmin.jkrumm.com (Tailscale-only).
   # ---------------------------------------------------------------------------
   argo-api:
-    image: ${IMAGE_TAG:-rollhook.jkrumm.com/argo-api:latest}
+    # Per-service IMAGE var so `make argo-up` can pin both services to the
+    # currently-running SHAs without one variable bleeding into the other.
+    # RollHook deploys also set the appropriate var per service.
+    image: ${ARGO_API_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/argo-api:latest}}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -107,7 +110,7 @@ services:
   # Static bundle. VITE_API_URL + HyperDX vars baked at build time via rollhook.
   # ---------------------------------------------------------------------------
   argo-dashboard:
-    image: ${IMAGE_TAG:-rollhook.jkrumm.com/argo-dashboard:latest}
+    image: ${ARGO_DASHBOARD_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/argo-dashboard:latest}}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
