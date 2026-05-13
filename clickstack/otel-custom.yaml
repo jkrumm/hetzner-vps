@@ -26,9 +26,17 @@ receivers:
 
 service:
   pipelines:
-    traces:
-      receivers: [otlp/hyperdx, otlp/internal]
-    logs/in:
-      receivers: [fluentforward, otlp/hyperdx, otlp/internal]
-    metrics:
-      receivers: [otlp/hyperdx, otlp/internal, prometheus]
+    # ClickStack's "merge" mechanism cannot add a receiver to an EXISTING
+    # pipeline — only add new components. So we define parallel pipelines
+    # that fan into the same clickhouse exporter / routing connector.
+    traces/internal:
+      receivers: [otlp/internal]
+      processors: [memory_limiter, batch]
+      exporters: [clickhouse]
+    logs/in-internal:
+      receivers: [otlp/internal]
+      exporters: [routing/logs]
+    metrics/internal:
+      receivers: [otlp/internal]
+      processors: [memory_limiter, batch]
+      exporters: [clickhouse]
