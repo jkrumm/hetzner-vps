@@ -119,10 +119,11 @@ services:
       CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}  # lego expects CF_DNS_API_TOKEN for Cloudflare DNS-01
       # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
-      # OTLP export auth — ClickStack ingestion key. Substituted into the
-      # `authorization` headers in traefik.yml (Traefik does support ${VAR}
-      # interpolation inside dynamic + static header values).
-      HYPERDX_API_KEY: ${HYPERDX_API_KEY}
+      # OTLP export auth — ClickStack ingestion key. Traefik 3.x doesn't
+      # substitute ${VAR} inside YAML header values, so we pass the header via
+      # the TRAEFIK_*_HTTP_HEADERS_authorization env var route instead.
+      TRAEFIK_TRACING_OTLP_HTTP_HEADERS_authorization: ${HYPERDX_API_KEY}
+      TRAEFIK_METRICS_OTLP_HTTP_HEADERS_authorization: ${HYPERDX_API_KEY}
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro

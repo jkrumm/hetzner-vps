@@ -48,14 +48,14 @@ providers:
     watch: true
 
 # OTLP export to ClickStack (reached via monitoring-net).
-# The `authorization` header value (HYPERDX_API_KEY) is substituted by Traefik
-# from the env var of the same name — Traefik supports ${VAR} in headers only.
+# Endpoints + service name live here; the authorization header is injected via
+# TRAEFIK_TRACING_OTLP_HTTP_HEADERS_authorization and TRAEFIK_METRICS_OTLP_HTTP_HEADERS_authorization
+# env vars in compose.networking.yml — Traefik 3.x doesn't substitute ${VAR}
+# inside YAML header values (empirically: spans never landed when configured that way).
 tracing:
   otlp:
     http:
       endpoint: http://clickstack:4318/v1/traces
-      headers:
-        authorization: "${HYPERDX_API_KEY}"
   serviceName: traefik
   sampleRate: 1.0
 
@@ -67,5 +67,3 @@ metrics:
     pushInterval: 30s
     http:
       endpoint: http://clickstack:4318/v1/metrics
-      headers:
-        authorization: "${HYPERDX_API_KEY}"
