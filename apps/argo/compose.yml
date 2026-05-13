@@ -65,7 +65,10 @@ services:
       # Shared VPS Postgres — own schema `argo`, schema-scoped user.
       DATABASE_URL: postgresql://argo:${ARGO_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=argo
       # OpenTelemetry — sends traces to ClickStack on monitoring-net.
+      # ClickStack's OTel collector enforces the authorization header on every
+      # ingest, including from inside the docker network. Without it: 401.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4318
+      OTEL_EXPORTER_OTLP_HEADERS: authorization=${HYPERDX_API_KEY_PROD}
       OTEL_SERVICE_NAME: argo-api
     volumes:
       - /var/lib/argo/data:/app/data

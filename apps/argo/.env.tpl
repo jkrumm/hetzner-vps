@@ -30,3 +30,8 @@ GARMIN_HEARTBEAT_URL=op://common/garmin-collector/PUSH_URL
 # --- Postgres (shared VPS postgres, schema `argo`) ---
 POSTGRES_DB=op://vps/config/POSTGRES_DB
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
+
+# --- Observability ---
+# ClickStack OTel collector requires the authorization header even on the
+# internal monitoring-net (verified via wget against http://clickstack:4318 → 401).
+HYPERDX_API_KEY_PROD=op://vps/argo/HYPERDX_API_KEY_PROD
