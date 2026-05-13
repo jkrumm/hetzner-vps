@@ -41,7 +41,9 @@ ROLLHOOK_SECRET=op://vps/rollhook/SECRET
 BESZEL_AGENT_KEY=op://vps/beszel/AGENT_KEY
 EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
 # HyperDX ingestion key — auth header on OTLP export from Traefik (traces + metrics).
-HYPERDX_API_KEY=op://vps/clickstack/HYPERDX_API_KEY_PROD
+# Shared with argo for now (revoke-independently is a future refactor: generate a
+# dedicated Traefik key in HyperDX → Team Settings and move this reference).
+HYPERDX_API_KEY=op://vps/argo/HYPERDX_API_KEY_PROD
 
 # --- Notifications ---
 SLACK_WATCHTOWER_URL=op://common/slack/WATCHTOWER_URL
