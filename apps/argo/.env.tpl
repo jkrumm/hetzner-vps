@@ -27,6 +27,13 @@ GARMIN_COLLECTOR_TOKEN=op://common/garmin-collector/TOKEN
 # UK push URL — argo's garmin-sync cron pings after each successful pull.
 GARMIN_HEARTBEAT_URL=op://common/garmin-collector/PUSH_URL
 
+# Atlassian (Jira) — IU work tenant. Read-only HTTP basic auth via PAT.
+# Email + base URL aren't secret but live alongside the token for atomic rotation.
+ATLASSIAN_BASE_URL=op://vps/argo/ATLASSIAN_BASE_URL
+JIRA_EMAIL=op://vps/argo/ATLASSIAN_EMAIL
+JIRA_API_TOKEN=op://vps/argo/ATLASSIAN_API
+JIRA_BOARD_ID=272
+
 # --- Postgres (shared VPS postgres, schema `argo`) ---
 POSTGRES_DB=op://vps/config/POSTGRES_DB
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD

@@ -62,6 +62,11 @@ services:
       GARMIN_COLLECTOR_URL: https://garmin.jkrumm.com
       GARMIN_COLLECTOR_TOKEN: ${GARMIN_COLLECTOR_TOKEN}
       GARMIN_HEARTBEAT_URL: ${GARMIN_HEARTBEAT_URL}
+      # Atlassian (Jira) — IU work tenant, read-only basic auth.
+      ATLASSIAN_BASE_URL: ${ATLASSIAN_BASE_URL}
+      JIRA_EMAIL: ${JIRA_EMAIL}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN}
+      JIRA_BOARD_ID: ${JIRA_BOARD_ID}
       # Docker socket proxies — VPS local + homelab over Tailscale.
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
