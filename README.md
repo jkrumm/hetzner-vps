@@ -320,6 +320,7 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 |-|-|-|
 | `BESZEL_AGENT_KEY` | `ssh-ed25519 AAAA...` | Beszel hub UI → Add System → address `<tailscale-ip>:45876` → copy SSH public key shown |
 | `EXPRESS_SESSION_SECRET` | `<generated>` | Generate: `openssl rand -hex 32` — HyperDX session encryption |
+| `HYPERDX_API_KEY` | `<ingestion-key>` | HyperDX UI → Team Settings → API Keys → Ingestion API Key. Auth header on OTLP export from Traefik (`op://vps/clickstack/HYPERDX_API_KEY_PROD`) |
 
 **RollHook**
 

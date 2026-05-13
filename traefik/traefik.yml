@@ -46,3 +46,26 @@ providers:
   file:
     directory: /etc/traefik/dynamic
     watch: true
+
+# OTLP export to ClickStack (reached via monitoring-net).
+# The `authorization` header value (HYPERDX_API_KEY) is substituted by Traefik
+# from the env var of the same name — Traefik supports ${VAR} in headers only.
+tracing:
+  otlp:
+    http:
+      endpoint: http://clickstack:4318/v1/traces
+      headers:
+        authorization: "${HYPERDX_API_KEY}"
+  serviceName: traefik
+  sampleRate: 1.0
+
+metrics:
+  otlp:
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    pushInterval: 30s
+    http:
+      endpoint: http://clickstack:4318/v1/metrics
+      headers:
+        authorization: "${HYPERDX_API_KEY}"

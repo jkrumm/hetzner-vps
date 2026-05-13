@@ -92,6 +92,7 @@ Key variables:
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |
+| `HYPERDX_API_KEY` | `op://vps/clickstack/HYPERDX_API_KEY_PROD` — ClickStack ingestion key, auth header on Traefik OTLP export |
 | `UMAMI_DB_PASSWORD` | Umami Postgres user password — `setup-postgres.sh` + `compose.monitoring.yml` |
 | `UMAMI_APP_SECRET` | Umami session secret — 32+ char random string (`openssl rand -hex 32`) |
 | `BASALT_UI_PLAYGROUND_DB_PASSWORD` | basalt-ui-playground Postgres user password — `setup-postgres.sh` |
