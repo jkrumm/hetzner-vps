@@ -125,6 +125,19 @@ services:
       - "traefik.http.services.argo-dashboard.loadbalancer.server.port=80"
       - "traefik.http.services.argo-dashboard.loadbalancer.healthcheck.path=/"
       - "traefik.http.services.argo-dashboard.loadbalancer.healthcheck.interval=10s"
+      # Same-origin OTLP routes so the browser HyperDX SDK can post traces/logs
+      # to argo.${DOMAIN}/v1/traces (avoids CORS preflight to clickstack). Routed
+      # to the existing clickstack-otel service on the monitoring stack.
+      - "traefik.http.routers.argo-otel-traces.rule=Host(`argo.${DOMAIN}`) && Path(`/v1/traces`)"
+      - "traefik.http.routers.argo-otel-traces.entrypoints=websecure"
+      - "traefik.http.routers.argo-otel-traces.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.argo-otel-traces.priority=200"
+      - "traefik.http.routers.argo-otel-traces.service=clickstack-otel@docker"
+      - "traefik.http.routers.argo-otel-logs.rule=Host(`argo.${DOMAIN}`) && Path(`/v1/logs`)"
+      - "traefik.http.routers.argo-otel-logs.entrypoints=websecure"
+      - "traefik.http.routers.argo-otel-logs.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.argo-otel-logs.priority=200"
+      - "traefik.http.routers.argo-otel-logs.service=clickstack-otel@docker"
       - "com.centurylinklabs.watchtower.enable=false"
       - "rollhook.allowed_repos=jkrumm/argo"
     networks:
