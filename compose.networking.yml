@@ -122,8 +122,15 @@ services:
       # OTLP export auth — ClickStack ingestion key. Traefik 3.x doesn't
       # substitute ${VAR} inside YAML header values, so we pass the header via
       # the TRAEFIK_*_HTTP_HEADERS_authorization env var route instead.
+      # The TRAEFIK_TRACING_OTLP_HTTP=true and TRAEFIK_METRICS_OTLP_HTTP=true
+      # toggles are required when the YAML only defines nested fields without
+      # the explicit boolean enable flag.
+      TRAEFIK_TRACING_OTLP_HTTP: "true"
       TRAEFIK_TRACING_OTLP_HTTP_HEADERS_authorization: ${HYPERDX_API_KEY}
+      TRAEFIK_METRICS_OTLP_HTTP: "true"
       TRAEFIK_METRICS_OTLP_HTTP_HEADERS_authorization: ${HYPERDX_API_KEY}
+      # Bump log level so tracing init issues surface in docker logs.
+      TRAEFIK_LOG_LEVEL: INFO
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
