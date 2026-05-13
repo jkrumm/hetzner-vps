@@ -177,7 +177,7 @@ argo-up: require-prod
 	fi; \
 	echo "  pinning argo-api      → $$API_IMG"; \
 	echo "  pinning argo-dashboard → $$WEB_IMG"; \
-	$(OP_RUN) ARGO_API_IMAGE=$$API_IMG ARGO_DASHBOARD_IMAGE=$$WEB_IMG docker compose -f apps/argo/compose.yml --env-file apps/argo/.env up -d
+	$(OP_RUN) env ARGO_API_IMAGE=$$API_IMG ARGO_DASHBOARD_IMAGE=$$WEB_IMG docker compose -f apps/argo/compose.yml --env-file apps/argo/.env up -d
 argo-down: require-prod ; $(OP_RUN) docker compose -f apps/argo/compose.yml --env-file apps/argo/.env down
 
 ## Trigger a fresh RollHook deploy by pushing an empty commit to argo's master.
