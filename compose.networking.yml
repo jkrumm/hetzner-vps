@@ -119,18 +119,9 @@ services:
       CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}  # lego expects CF_DNS_API_TOKEN for Cloudflare DNS-01
       # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
-      # OTLP export auth — ClickStack ingestion key. Traefik 3.x doesn't
-      # substitute ${VAR} inside YAML header values, so we pass the header via
-      # the TRAEFIK_*_HTTP_HEADERS_authorization env var route instead.
-      # The TRAEFIK_TRACING_OTLP_HTTP=true and TRAEFIK_METRICS_OTLP_HTTP=true
-      # toggles are required when the YAML only defines nested fields without
-      # the explicit boolean enable flag.
-      TRAEFIK_TRACING_OTLP_HTTP: "true"
-      TRAEFIK_TRACING_OTLP_HTTP_HEADERS_authorization: ${HYPERDX_API_KEY}
-      TRAEFIK_METRICS_OTLP_HTTP: "true"
-      TRAEFIK_METRICS_OTLP_HTTP_HEADERS_authorization: ${HYPERDX_API_KEY}
-      # Bump log level so tracing init issues surface in docker logs.
-      TRAEFIK_LOG_LEVEL: INFO
+      # Traefik talks to ClickStack on the unauthed :4319 receiver (added in
+      # clickstack/otel-custom.yaml, bound to docker bridge only).
+      # No HYPERDX_API_KEY needed here.
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro

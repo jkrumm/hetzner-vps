@@ -32,6 +32,5 @@ POSTGRES_DB=op://vps/config/POSTGRES_DB
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
 
 # --- Observability ---
-# ClickStack OTel collector requires the authorization header even on the
-# internal monitoring-net (verified via wget against http://clickstack:4318 → 401).
-HYPERDX_API_KEY_PROD=op://vps/argo/HYPERDX_API_KEY_PROD
+# argo-api uses the unauthed clickstack:4319 internal receiver — no key needed.
+# (Browser SDK still hits :4318 via Traefik with the bundled HyperDX key.)

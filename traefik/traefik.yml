@@ -11,7 +11,7 @@ api:
   insecure: false
 
 log:
-  level: WARN
+  level: DEBUG
 
 accessLog:
   bufferingSize: 100
@@ -47,15 +47,24 @@ providers:
     directory: /etc/traefik/dynamic
     watch: true
 
-# OTLP export to ClickStack (reached via monitoring-net).
-# Endpoints + service name live here; the authorization header is injected via
-# TRAEFIK_TRACING_OTLP_HTTP_HEADERS_authorization and TRAEFIK_METRICS_OTLP_HTTP_HEADERS_authorization
-# env vars in compose.networking.yml — Traefik 3.x doesn't substitute ${VAR}
-# inside YAML header values (empirically: spans never landed when configured that way).
+# OTLP export to ClickStack via the trusted-internal port (no auth).
+#
+# Why :4319 not :4318:
+#   ClickStack's bundled OTel collector enforces bearertokenauth on :4318 and
+#   the auth is locked (OpAMP base config, no env to disable). Traefik 3.x has
+#   two known issues that prevent us from sending the auth header reliably:
+#     1. ${VAR} substitution is not performed in static-YAML header values
+#     2. TRAEFIK_TRACING_OTLP_HTTP_HEADERS_authorization env var doesn't
+#        populate the headers map at config-load time
+#        (traefik-helm-chart#1361 — acknowledged bug, unfixed in 3.6).
+#   Rather than templating this file at deploy, we add a second OTLP receiver
+#   on :4319 inside ClickStack (see clickstack/otel-custom.yaml) without auth,
+#   bound only to the docker bridge. Traefik → clickstack:4319 stays inside
+#   monitoring-net; never published to host, never routed via Traefik itself.
 tracing:
   otlp:
     http:
-      endpoint: http://clickstack:4318
+      endpoint: http://clickstack:4319
   serviceName: traefik
   sampleRate: 1.0
 
@@ -66,4 +75,4 @@ metrics:
     addServicesLabels: true
     pushInterval: 30s
     http:
-      endpoint: http://clickstack:4318
+      endpoint: http://clickstack:4319

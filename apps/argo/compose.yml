@@ -64,11 +64,11 @@ services:
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
       # Shared VPS Postgres — own schema `argo`, schema-scoped user.
       DATABASE_URL: postgresql://argo:${ARGO_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=argo
-      # OpenTelemetry — sends traces to ClickStack on monitoring-net.
-      # ClickStack's OTel collector enforces the authorization header on every
-      # ingest, including from inside the docker network. Without it: 401.
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4318
-      OTEL_EXPORTER_OTLP_HEADERS: authorization=${HYPERDX_API_KEY_PROD}
+      # OpenTelemetry — sends traces to ClickStack via the unauthed :4319 port
+      # (see clickstack/otel-custom.yaml). Bound to the docker bridge only;
+      # never published to host or routed via Traefik. The :4318 port stays
+      # authed for browser SDK ingress through Traefik.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: argo-api
     volumes:
       - /var/lib/argo/data:/app/data

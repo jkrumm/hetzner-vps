@@ -1,0 +1,34 @@
+# ClickStack OTel Collector — merged with the bundled base config at startup.
+# Loaded via CUSTOM_OTELCOL_CONFIG_FILE env var (see compose.monitoring.yml).
+#
+# Why this file exists:
+#   - The base config enforces bearertokenauth on the :4318 (HTTP) and :4317
+#     (gRPC) OTLP receivers, and the base is locked (OpAMP-managed — no env
+#     to disable, no override).
+#   - Internal services on monitoring-net (traefik, argo-api, etc.) need to
+#     export OTLP, but Traefik 3.x cannot reliably inject env-var values into
+#     its static-YAML auth headers (traefik-helm-chart#1361, unfixed).
+#   - Solution: add a SECOND receiver instance on :4319 without auth, wire it
+#     into the same trace/log/metric pipelines. Bind only to the docker bridge
+#     — never published to host or exposed via Traefik — so the trust boundary
+#     is the docker network, not the receiver.
+#
+# Browser SDK ingress (argo.DOMAIN/v1/traces → Traefik → clickstack:4318) still
+# goes through the authenticated path, since the browser embeds the ingestion
+# key anyway.
+
+receivers:
+  otlp/internal:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4319
+        include_metadata: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp/hyperdx, otlp/internal]
+    logs/in:
+      receivers: [fluentforward, otlp/hyperdx, otlp/internal]
+    metrics:
+      receivers: [otlp/hyperdx, otlp/internal, prometheus]
