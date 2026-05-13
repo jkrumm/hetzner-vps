@@ -55,7 +55,7 @@ providers:
 tracing:
   otlp:
     http:
-      endpoint: http://clickstack:4318/v1/traces
+      endpoint: http://clickstack:4318
   serviceName: traefik
   sampleRate: 1.0
 
@@ -66,4 +66,4 @@ metrics:
     addServicesLabels: true
     pushInterval: 30s
     http:
-      endpoint: http://clickstack:4318/v1/metrics
+      endpoint: http://clickstack:4318
