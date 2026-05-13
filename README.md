@@ -255,7 +255,7 @@ Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 m
 |-|-|-|
 | `DOMAIN` | `example.com` | Your apex domain — wildcard cert covers `*.DOMAIN` |
 | `ACME_EMAIL` | `you@example.com` | Email for Let's Encrypt notifications |
-All Cloudflare env vars use the unified `CLOUDFLARE_*` prefix (matches the centralized `/cloudflare` skill at `~/SourceRoot/.claude/skills/cloudflare/`).
+All Cloudflare env vars use the unified `CLOUDFLARE_*` prefix (matches the `/cloudflare` skill at `~/.claude/skills/cloudflare/`).
 
 | Variable | Source | Notes |
 |-|-|-|

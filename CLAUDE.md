@@ -57,7 +57,7 @@ git push && ssh vps "cd ~/vps && git pull"
 |-|-|-|
 | `/audit` | main | 7-phase health audit: resources, containers, tunnel, Tailscale, errors, backup, manual upgrades (Postgres + Valkey) |
 | `/docs` | main | Documentation maintenance — sync compose files against README/CLAUDE.md, verify Secrets section coverage |
-| `/cloudflare` | main | Cloudflare API operations — DNS records, tunnel ingress config, multi-domain support. Centralized at `~/SourceRoot/.claude/skills/cloudflare/` (sourced from dotfiles), shared with HomeLab |
+| `/cloudflare` | main | Cloudflare API operations — DNS records, tunnel ingress config, multi-domain support. Global skill at `~/.claude/skills/cloudflare/` (sourced from dotfiles), shared with HomeLab |
 
 ---
 
