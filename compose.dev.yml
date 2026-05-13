@@ -56,24 +56,33 @@ services:
   # ---------------------------------------------------------------------------
   # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
   # UI: https://hyperdx.test (routed via dotfiles Caddyfile + dnsmasq)
-  # Apps: OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+  # Apps: OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4319 (unauthed)
   # First visit → create admin account (persisted in volume).
+  #
+  # Mirrors the prod two-tier OTLP setup (see vps/docs/observability.md):
+  #   :4317/:4318 — bundled receivers, bearertokenauth enforced
+  #   :4319       — custom unauthed receiver added via otel-custom.yaml,
+  #                 same file as prod monitoring stack uses.
+  # Local apps + the Vite proxy point at :4319 so dev needs no ingestion key.
   # ---------------------------------------------------------------------------
   clickstack:
     image: clickhouse/clickstack-all-in-one:latest
     container_name: clickstack
     ports:
       - "7707:8080"   # HyperDX UI
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - "4317:4317"   # OTLP gRPC (authed)
+      - "4318:4318"   # OTLP HTTP (authed) — kept for parity testing
+      - "4319:4319"   # OTLP HTTP (unauthed, dev default)
     volumes:
       - clickstack-db:/data/db
       - clickstack-ch-data:/var/lib/clickhouse
       - clickstack-ch-logs:/var/log/clickhouse-server
+      - ./clickstack/otel-custom.yaml:/etc/otelcol-contrib/custom.config.yaml:ro
     environment:
       HYPERDX_LOG_LEVEL: debug
       USAGE_STATS_ENABLED: "false"
       FRONTEND_URL: https://hyperdx.test
+      CUSTOM_OTELCOL_CONFIG_FILE: /etc/otelcol-contrib/custom.config.yaml
 
 volumes:
   postgres-dev-data:
