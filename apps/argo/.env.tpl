@@ -34,6 +34,12 @@ JIRA_EMAIL=op://vps/argo/ATLASSIAN_EMAIL
 JIRA_API_TOKEN=op://vps/argo/ATLASSIAN_API
 JIRA_BOARD_ID=272
 
+# GitLab — IU work on gitlab.com (iu-group/*). Read-only PAT, scopes
+# `read_api` + `read_user`. Base URL is not secret but kept here so a future
+# self-hosted GitLab switch is a single-file change.
+GITLAB_BASE_URL=https://gitlab.com
+GITLAB_TOKEN=op://vps/argo/GITLAB_TOKEN
+
 # --- Postgres (shared VPS postgres, schema `argo`) ---
 POSTGRES_DB=op://vps/config/POSTGRES_DB
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
