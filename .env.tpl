@@ -46,7 +46,11 @@ EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
 HYPERDX_API_KEY=op://vps/argo/HYPERDX_API_KEY_PROD
 
 # --- Notifications ---
+# WATCHTOWER_URL is the shoutrrr-format (slack://...) for Watchtower's notifier.
+# WEBHOOK_UPDATES is the plain https webhook for the same #updates channel — used
+# by services (e.g. rollhook) that POST raw JSON to a webhook URL directly.
 SLACK_WATCHTOWER_URL=op://common/slack/WATCHTOWER_URL
+SLACK_WEBHOOK_UPDATES=op://common/slack/WEBHOOK_UPDATES
 
 # --- Backups ---
 AWS_ACCESS_KEY_ID=op://common/backblaze-s3/ACCESS_KEY_ID
