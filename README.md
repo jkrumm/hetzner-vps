@@ -328,6 +328,9 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 |-|-|-|
 | `ROLLHOOK_SECRET` | `<generated>` | In 1Password: `vps/rollhook/SECRET` |
 | `ZOT_PASSWORD` | `<generated>` | In 1Password: `common/zot/PASSWORD` — used for `docker login rollhook.jkrumm.com` |
+| `SLACK_WEBHOOK_URL` | reuses `SLACK_WATCHTOWER_URL` | Deploy success/failure pings to Slack `#updates`. No new op item — points at `op://common/slack/WATCHTOWER_URL`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://clickstack:4319` | Unauthed OTLP HTTP receiver on the docker bridge (see `clickstack/otel-custom.yaml`). RollHook is on `monitoring-net` to reach it. |
+| `DEPLOY_ENVIRONMENT` | `prod` | Tag attached to deploy logs/markers. |
 
 ---
 
@@ -495,6 +498,8 @@ All dashboards are Tailscale-only — no public routes.
 | Dozzle | homelab Dozzle hub | Live container logs |
 | HyperDX (ClickStack) | `https://hyperdx.<DOMAIN>` (tailscale-only) | Traces, metrics, logs, session replay |
 | Watchtower | Pushover only (warn level) | Container update failures |
+| RollHook | Slack `#updates` | Deploy success/failure (reuses Watchtower webhook) |
+| RollHook | HyperDX (ClickStack) | OTLP deploy markers, `service.name=rollhook` |
 | Traefik | `https://traefik.<DOMAIN>` | Router/service map, cert status |
 
 Traefik dashboard is publicly DNS-resolvable but protected by `tailscale-only` middleware (IP allowlist: `100.64.0.0/10`).
