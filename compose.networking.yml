@@ -201,6 +201,16 @@ services:
       ROLLHOOK_URL: https://rollhook.jkrumm.com
       PORT: "7700"
       DOCKER_HOST: tcp://socket-proxy-rollhook:2375
+      # Deploy notifications — reuses the existing Watchtower webhook (same
+      # #updates channel, same op item). RollHook posts deploy success/failure
+      # pings here. See rollhook#15.
+      SLACK_WEBHOOK_URL: ${SLACK_WATCHTOWER_URL}
+      # OTLP logs export to ClickStack via the unauthed :4319 receiver bound
+      # to the docker bridge (see clickstack/otel-custom.yaml + the Traefik
+      # precedent above). Surfaces deploys as queryable markers in HyperDX
+      # with service.name=rollhook.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      DEPLOY_ENVIRONMENT: prod
     volumes:
       - rollhook-data:/app/data
       # Mount all app compose dirs — RollHook reads compose.yml from inside the container
@@ -222,6 +232,7 @@ services:
     networks:
       - proxy
       - socket-proxy-rollhook-net
+      - monitoring-net   # reach clickstack:4319 for OTLP deploy markers
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
