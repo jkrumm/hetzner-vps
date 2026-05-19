@@ -30,6 +30,10 @@ networks:
   # snapshots so an in-memory room survives a RollHook rolling restart.
   valkey-net:
     external: true
+  # Shared with compose.monitoring.yml — fpp-server and fpp-analytics emit
+  # OTLP traces + logs to clickstack:4319 (unauthed receiver, docker-only).
+  monitoring-net:
+    external: true
 
 volumes:
   mariadb-data:
@@ -94,7 +98,10 @@ services:
       LOG_LEVEL: INFO
       TRPC_URL: https://free-planning-poker.com/api/trpc
       FPP_SERVER_SECRET: ${FPP_SERVER_SECRET}
-      SENTRY_DSN: ${FPP_SERVER_SENTRY_DSN}
+      # OTLP HTTP receiver on the ClickStack monitoring-net bridge. No auth
+      # required — trust boundary is docker network membership.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: fpp-server
       # Valkey for room state snapshots — survives RollHook rolling restart.
       # No password (Valkey is on an internal-only Docker network). Unsetting
       # this env var degrades gracefully to in-memory-only behavior.
@@ -123,6 +130,7 @@ services:
     networks:
       - proxy
       - valkey-net
+      - monitoring-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -139,10 +147,14 @@ services:
     mem_limit: 1g
     environment:
       LOG_LEVEL: INFO
-      SENTRY_ENVIRONMENT: production
       DATA_DIR: /app/data
       ANALYTICS_SECRET_TOKEN: ${FPP_ANALYTICS_SECRET_TOKEN}
-      FPP_ANALYTICS_SENTRY_DSN: ${FPP_ANALYTICS_SENTRY_DSN}
+      # Unauthed OTLP HTTP receiver on the ClickStack monitoring-net bridge —
+      # same port everything else in the fpp stack uses. :4317 (gRPC) is
+      # authed and we don't ship an auth header from the Python exporter.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: fpp-analytics
+      OTEL_DEPLOYMENT_ENVIRONMENT: production
       BEA_BASE_URL: ${FPP_BEA_BASE_URL}
       BEA_SECRET_KEY: ${FPP_BEA_SECRET_KEY}
     volumes:
@@ -167,6 +179,7 @@ services:
       - "rollhook.allowed_repos=jkrumm/free-planning-poker"
     networks:
       - proxy
+      - monitoring-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -210,7 +223,6 @@ services:
     entrypoint: ["sh", "-c", "while true; do python update_readmodel.py; sleep 600; done"]
     environment:
       LOG_LEVEL: INFO
-      SENTRY_ENVIRONMENT: production
       DATA_DIR: /app/data
       DB_HOST: mariadb
       DB_PORT: "3306"
@@ -218,7 +230,12 @@ services:
       DB_PASSWORD: ${MARIADB_FPP_PASSWORD}
       DB_SSL: "true"
       DB_SSL_VERIFY: "false"
-      FPP_ANALYTICS_SENTRY_DSN: ${FPP_ANALYTICS_SENTRY_DSN}
+      # Unauthed OTLP HTTP receiver — same endpoint as fpp-analytics. Each
+      # sync run initializes its own TracerProvider; shutdown_telemetry
+      # flushes on exit.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: fpp-analytics-updater
+      OTEL_DEPLOYMENT_ENVIRONMENT: production
       UPTIMEKUMA_PUSH_URL: ${UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL}
     volumes:
       - fpp-analytics-data:/app/data
@@ -227,6 +244,7 @@ services:
         condition: service_healthy
     networks:
       - mariadb-net
+      - monitoring-net
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
       - "rollhook.allowed_repos=jkrumm/free-planning-poker"
