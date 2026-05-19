@@ -20,6 +20,10 @@ SLACK_BOT_TOKEN=op://common/slack/BOT_TOKEN
 SLACK_USER_TOKEN=op://common/slack/USER_TOKEN
 GOOGLE_CLIENT_ID=op://common/google-oauth/CLIENT_ID
 GOOGLE_CLIENT_SECRET=op://common/google-oauth/CLIENT_SECRET
+# Comma-separated list of Google account emails allowed to grant consent.
+# Enforced in clients/google.ts:exchangeCode — protects against token-overwrite
+# attacks once the OAuth app is published to "In Production" status.
+GOOGLE_ALLOWED_EMAIL=op://vps/argo/GOOGLE_ALLOWED_EMAIL
 
 # Garmin: argo only needs the bearer to talk to homelab's garmin-collector.
 # Email/password stay in homelab vault — only the collector consumes them.
