@@ -58,6 +58,7 @@ services:
       SLACK_USER_TOKEN: ${SLACK_USER_TOKEN}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_ALLOWED_EMAIL: ${GOOGLE_ALLOWED_EMAIL}
       # Garmin-collector lives on homelab (Tailscale-only public DNS).
       GARMIN_COLLECTOR_URL: https://garmin.jkrumm.com
       GARMIN_COLLECTOR_TOKEN: ${GARMIN_COLLECTOR_TOKEN}
