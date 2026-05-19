@@ -73,11 +73,14 @@ services:
       - "4317:4317"   # OTLP gRPC (authed)
       - "4318:4318"   # OTLP HTTP (authed) — kept for parity testing
       - "4319:4319"   # OTLP HTTP (unauthed, dev default)
+      - "127.0.0.1:8123:8123"  # ClickHouse HTTP — loopback-only for direct OTEL queries
+                               # from the host (used by /otel skill --transport http).
     volumes:
       - clickstack-db:/data/db
       - clickstack-ch-data:/var/lib/clickhouse
       - clickstack-ch-logs:/var/log/clickhouse-server
       - ./clickstack/otel-custom.yaml:/etc/otelcol-contrib/custom.config.yaml:ro
+      - ./clickstack/users-dev.xml:/etc/clickhouse-server/users.d/dev-default.xml:ro
     environment:
       HYPERDX_LOG_LEVEL: debug
       USAGE_STATS_ENABLED: "false"
