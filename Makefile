@@ -3,7 +3,7 @@ export
 
 ENV ?= dev
 
-OP_RUN = op run --env-file=.env.tpl --
+OP_RUN = op run --account tkrumm --env-file=.env.tpl --
 
 .DEFAULT_GOAL := help
 
@@ -114,7 +114,7 @@ fpp-bootstrap-images: require-prod
 ## can resolve ${VAR} interpolations in apps/fpp/compose.yml. Re-run after secret
 ## rotation. The resulting .env is chmod 600, gitignored, and stays on VPS.
 fpp-env: require-prod
-	op inject -i apps/fpp/.env.tpl -o apps/fpp/.env -f
+	op --account tkrumm inject -i apps/fpp/.env.tpl -o apps/fpp/.env -f
 	chmod 644 apps/fpp/.env
 	@echo "Wrote apps/fpp/.env (chmod 644, gitignored)"
 	@echo "Note: 644 is required because the RollHook container runs as a"
@@ -150,7 +150,7 @@ bun-email-api-bootstrap-image: require-prod
 ## can resolve ${VAR} interpolations in apps/bun-email-api/compose.yml. Re-run
 ## after rotating BEA secrets. Resulting .env is chmod 644 and gitignored.
 bun-email-api-env: require-prod
-	op inject -i apps/bun-email-api/.env.tpl -o apps/bun-email-api/.env -f
+	op --account tkrumm inject -i apps/bun-email-api/.env.tpl -o apps/bun-email-api/.env -f
 	chmod 644 apps/bun-email-api/.env
 	@echo "Wrote apps/bun-email-api/.env (chmod 644, gitignored)"
 
@@ -200,7 +200,7 @@ argo-bootstrap-image: require-prod
 ## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
 ## rotating any argo secret. Resulting .env is chmod 644 and gitignored.
 argo-env: require-prod
-	op inject -i apps/argo/.env.tpl -o apps/argo/.env -f
+	op --account tkrumm inject -i apps/argo/.env.tpl -o apps/argo/.env -f
 	chmod 644 apps/argo/.env
 	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
 
