@@ -1,0 +1,26 @@
+<!--
+  Dev-only override for the ClickHouse `default` user.
+
+  Why: the bundled clickstack-all-in-one image ships a default user with no
+  password, but restricts it to loopback IPs (::1 / 127.0.0.1) *inside the
+  container*. Connections from the host arrive on the docker bridge IP, so
+  they get rejected with 401 even though the host port is 127.0.0.1-bound.
+
+  This file widens the network list to any source so we can curl
+  `localhost:8123` from the dev machine. The host port mapping in
+  compose.dev.yml stays bound to 127.0.0.1, so the actual exposure surface
+  is the dev box only — no LAN reach.
+
+  Mounted into the container at /etc/clickhouse-server/users.d/dev-default.xml
+  via compose.dev.yml. NOT applied in prod (compose.monitoring.yml doesn't
+  reference it).
+-->
+<clickhouse>
+  <users>
+    <default>
+      <networks replace="replace">
+        <ip>::/0</ip>
+      </networks>
+    </default>
+  </users>
+</clickhouse>
