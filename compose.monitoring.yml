@@ -50,6 +50,16 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - socket-proxy-watchtower-net
+    # Probes the docker socket backend through HAProxy (PING=1). If the daemon
+    # is restarted and this container keeps a stale socket handle, /_ping starts
+    # returning 503 and the container flips to "unhealthy" instead of failing
+    # silently at the next 04:00 Watchtower run.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:2375/_ping"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
