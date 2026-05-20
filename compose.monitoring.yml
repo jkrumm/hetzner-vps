@@ -170,15 +170,6 @@ services:
       - "traefik.http.routers.clickstack-otel.service=clickstack-otel"
       - "traefik.http.services.clickstack-otel.loadbalancer.server.port=4318"
       - "traefik.http.routers.clickstack-otel.middlewares=rate-limit@file,security-headers@file"
-      # HyperDX API — public, scoped to /api only (UI root stays Tailscale-only on
-      # hyperdx.DOMAIN). Lets Vercel's build run @hyperdx/cli upload-sourcemaps,
-      # which can't reach the grey-cloud UI host. Auth is HyperDX's own bearer
-      # service key — no Cloudflare Access needed for this narrow surface.
-      - "traefik.http.routers.clickstack-api.rule=Host(`hyperdx-api.${DOMAIN}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.clickstack-api.entrypoints=websecure"
-      - "traefik.http.routers.clickstack-api.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.clickstack-api.service=clickstack"
-      - "traefik.http.routers.clickstack-api.middlewares=rate-limit@file,security-headers@file"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
