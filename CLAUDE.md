@@ -34,6 +34,7 @@ make fpp-cert-sync       # run once after networking-up; cron does it every 6h
 
 # Status + ops
 make ps                  # docker ps with name/status/ports
+make db-counts           # exact per-table COUNT(*) (Postgres + MariaDB) — diff to verify a sync/restore matches prod
 make shell-postgres      # psql shell (uses op run with .env.tpl)
 make fpp-shell           # mariadb shell (uses op run with .env.tpl)
 make backup              # manual pg_dump → S3 (prod only — guarded)
@@ -199,6 +200,7 @@ scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docke
 scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
+scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
 scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)

@@ -14,7 +14,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
         photo-gallery-up photo-gallery-down \
-        postgres-setup ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres prune
+        postgres-setup ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -243,6 +243,11 @@ firewall: require-prod
 ## Interactive psql shell — works in both envs.
 shell-postgres:
 	$(OP_RUN) docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+
+## Exact per-table row counts (Postgres all schemas + MariaDB fpp). Read-only,
+## both envs, diff-friendly — use to verify two DB states match after sync/restore.
+db-counts:
+	./scripts/db-counts.sh
 
 ## Reclaim disk: stopped containers, unused images, build cache. Both envs. Never touches volumes.
 prune:

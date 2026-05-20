@@ -416,11 +416,22 @@ make sync-from-prod                     # Postgres: whole-DB pg_dump over SSH �
 make pg-sync-schema SCHEMA=argo         # Postgres: one schema only (least-priv)
 make fpp-restore-local                  # MariaDB: latest (or BACKUP_FILE=) S3 dump → local
 make fpp-sync-from-prod                 # MariaDB: mariadb-dump over SSH → local
+
+make db-counts                          # exact per-table COUNT(*) (both DBs), diff-friendly
 ```
 
 App repos delegate their local DB seeding to these targets rather than
 re-implementing them — e.g. `free-planning-poker` calls `make -C ../vps fpp-sync-from-prod`,
 and `argo`'s `bun db:sync` calls `make -C ../vps pg-sync-schema SCHEMA=argo`.
+
+**Verifying a restore/sync is faithful.** `make db-counts` prints stable-sorted
+`schema|table|rows` for both DBs. Capture it after a `sync-from-prod` (= live prod)
+and after a `restore-local` (= the S3 backup), then `diff` the two: Postgres should be
+identical and MariaDB should differ only by a small *positive* delta on hot tables
+(`fpp_events`, `fpp_page_views`) — live writes between the backup and the sync. Any
+other difference is a real problem. Don't trust the summaries the sync/restore scripts
+print: those use Postgres `n_live_tup` (stale until ANALYZE) and MariaDB `TABLE_ROWS`
+(an InnoDB estimate). Only `db-counts` runs an actual `COUNT(*)`.
 
 ---
 

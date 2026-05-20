@@ -11,6 +11,7 @@
 | Backup prod → S3 | `make backup` / `make fpp-backup` (+ nightly cron) | no — safe |
 | Local ← prod (db→db) | `make sync-from-prod`, `make pg-sync-schema SCHEMA=…`, `make fpp-sync-from-prod` | dev-only, never touches prod |
 | Local ← S3 | `make restore-local`, `make fpp-restore-local` | dev-only, never touches prod |
+| Verify counts | `make db-counts` | read-only, both envs |
 | **Prod ← S3 (restore)** | **scripts below — no make target** | **heavily gated** |
 
 Nothing else writes to prod. The dev syncs always replace the **whole schema**
@@ -43,10 +44,12 @@ op run --env-file=.env.tpl -- \
   aws s3 ls "s3://$AWS_S3_BUCKET/backups/vps/mariadb/" --endpoint-url "$AWS_S3_ENDPOINT"
 ```
 
-Validate the chosen dump **first** without touching prod — restore it locally:
+Validate the chosen dump **first** without touching prod — restore it locally and
+confirm the row counts are sane:
 
 ```bash
 BACKUP_FILE=postgres_<db>_YYYYMMDD_HHMMSS.dump make restore-local   # dev box
+make db-counts                                                      # exact COUNT(*) per table
 ```
 
 ### 2. Restore prod (on the VPS, deliberate)
