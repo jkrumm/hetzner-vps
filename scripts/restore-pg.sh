@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PostgreSQL restore from object storage backup.
-# WARNING: Drops and recreates the target database. Use with caution.
-# Usage: BACKUP_FILE=postgres_mydb_20260224_030000.dump ./scripts/restore-pg.sh
+# PostgreSQL restore from object storage backup → OVERWRITES the PRODUCTION DB.
+#
+# THIS IS A LAST-RESORT DISASTER-RECOVERY TOOL. There is deliberately NO `make`
+# target for it. It is heavily gated (see guard below). For the full procedure
+# read docs/disaster-recovery.md FIRST.
+#
+# Usage (human, deliberate):
+#   op run --env-file=.env.tpl -- env BACKUP_FILE=<file> ./scripts/restore-pg.sh
 #
 # Required env vars (from 1Password via .env.tpl):
 #   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
@@ -12,28 +17,46 @@
 set -euo pipefail
 
 BACKUP_FILE="${BACKUP_FILE:-}"
+BACKUP_PREFIX="backups/vps/postgres"
 
 if [[ -z "${BACKUP_FILE}" ]]; then
   echo "Usage: BACKUP_FILE=<filename> ./scripts/restore-pg.sh"
   echo ""
   echo "Available backups:"
-  aws s3 ls "s3://${AWS_S3_BUCKET}/backups/" \
+  aws s3 ls "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/" \
     --endpoint-url "${AWS_S3_ENDPOINT}" \
     | awk '{print $4}' | sort
   exit 1
 fi
 
-echo "WARNING: This will drop and restore the database: ${POSTGRES_DB}"
+# ─── PRODUCTION RESTORE GUARD ────────────────────────────────────────────────
+# Overwrites PROD. No make target. Human-only. See docs/disaster-recovery.md.
+#   1. refuses on passwordless-sudo hosts (the VPS) unless BREAK_GLASS=1
+#   2. requires a real sudo password (proves a present human / local machine)
+#   3. requires typing the exact database name
+echo
+echo "##############################################################"
+echo "#  DANGER: about to DROP & RESTORE the PRODUCTION database.   #"
+echo "##############################################################"
+sudo -k 2>/dev/null || true
+if [[ "${BREAK_GLASS:-}" != "1" ]] && sudo -n true 2>/dev/null; then
+  echo "REFUSED: passwordless sudo detected — this looks like the VPS."
+  echo "Run from your local machine (password-protected sudo). For genuine"
+  echo "on-server DR, re-run with BREAK_GLASS=1. See docs/disaster-recovery.md."
+  exit 1
+fi
+echo "Authenticate as a human operator (sudo password required):"
+sudo -v
 echo "Backup file: ${BACKUP_FILE}"
-echo ""
-read -rp "Type 'yes' to confirm: " confirm
-[[ "${confirm}" != "yes" ]] && echo "Aborted." && exit 1
+read -rp "Type the database name to confirm: " confirm
+[[ "${confirm}" != "${POSTGRES_DB}" ]] && { echo "Name mismatch. Aborted."; exit 1; }
+# ─────────────────────────────────────────────────────────────────────────────
 
 echo "Downloading ${BACKUP_FILE} from S3..."
 TMPFILE=$(mktemp /tmp/pg_restore_XXXXXX.dump)
 trap "rm -f ${TMPFILE}" EXIT
 
-aws s3 cp "s3://${AWS_S3_BUCKET}/backups/${BACKUP_FILE}" "${TMPFILE}" \
+aws s3 cp "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILE}" "${TMPFILE}" \
   --endpoint-url "${AWS_S3_ENDPOINT}"
 
 echo "Restoring into ${POSTGRES_DB}..."

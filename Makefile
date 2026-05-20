@@ -10,11 +10,11 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
 .PHONY: help require-prod require-dev \
         up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
-        fpp-backup fpp-restore fpp-shell fpp-restore-local fpp-sync-from-prod \
+        fpp-backup fpp-shell fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
         photo-gallery-up photo-gallery-down \
-        postgres-setup ps backup firewall shell-postgres prune
+        postgres-setup ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -123,9 +123,9 @@ fpp-env: require-prod
 ## FPP MariaDB → S3 backup (cron 03:30 in prod; manual via this target).
 fpp-backup: require-prod
 	$(OP_RUN) ./apps/fpp/scripts/backup-mariadb.sh
-## Interactive restore of FPP MariaDB from S3 — drops DB first, confirms before proceeding.
-fpp-restore: require-prod
-	$(OP_RUN) ./apps/fpp/scripts/restore-mariadb.sh
+# NOTE: restoring PROD MariaDB from S3 has NO make target by design — it overwrites
+# production. It is a gated, human-only DR tool: apps/fpp/scripts/restore-mariadb.sh
+# (see docs/disaster-recovery.md).
 ## Dev — pull latest (or BACKUP_FILE=...) S3 backup → local mariadb. Validates DR chain.
 fpp-restore-local: require-dev
 	$(OP_RUN) ./apps/fpp/scripts/restore-mariadb-local.sh
@@ -223,6 +223,18 @@ ps:
 ## Manual Postgres → S3 backup (cron 03:00 in prod; manual via this target).
 backup: require-prod
 	$(OP_RUN) ./scripts/backup-pg.sh
+# NOTE: restoring PROD Postgres from S3 has NO make target by design — it overwrites
+# production. It is a gated, human-only DR tool: scripts/restore-pg.sh
+# (see docs/disaster-recovery.md).
+## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → local. Validates DR chain. Drops whole local DB.
+restore-local: require-dev
+	$(OP_RUN) ./scripts/restore-pg-local.sh
+## Dev — fresh whole-DB sync from prod Postgres over SSH (no S3). Drops whole local DB.
+sync-from-prod: require-dev
+	$(OP_RUN) ./scripts/sync-pg-from-vps.sh
+## Dev — per-schema sync from prod (SCHEMA=argo). Least-priv, leaves other schemas intact.
+pg-sync-schema: require-dev
+	SCHEMA="$(SCHEMA)" $(OP_RUN) ./scripts/sync-pg-schema-from-vps.sh
 
 ## UFW status + rules — prod-only (the dev box has its own firewall).
 firewall: require-prod

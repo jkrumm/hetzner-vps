@@ -17,8 +17,14 @@ make monitoring-up
 make monitoring-down
 
 # Postgres
-make backup          # manual pg_dump → S3
+make backup          # manual pg_dump → S3 (prod)
 make shell-postgres  # psql shell
+# Restoring PROD from S3 has NO make target by design — see docs/disaster-recovery.md
+
+# Postgres — dev seeding / DR from prod (ENV=dev — gated)
+make restore-local              # pull latest (or BACKUP_FILE=) S3 pg backup → local (validates DR chain). Drops whole DB.
+make sync-from-prod             # whole-DB ssh+docker exec pg_dump VPS → local (fresh, no S3). Drops whole DB.
+make pg-sync-schema SCHEMA=argo # one schema only (least-priv, leaves other schemas intact)
 
 # FPP / MariaDB (apps/fpp/)
 make fpp-up                  # start MariaDB (and fpp-server / fpp-analytics later)
@@ -399,10 +405,22 @@ Two daily backups, both stream to the same `jkrumm` B2 bucket under `backups/vps
 make backup           # Postgres
 make fpp-backup       # MariaDB
 
-# Restore (interactive — confirms destructive action)
-op run --env-file=.env.tpl -- ./scripts/restore-pg.sh
-make fpp-restore
+# Restoring PROD from S3 overwrites the live DB → NO make target by design.
+# Gated, human-only DR tools (scripts/restore-pg.sh, apps/fpp/scripts/restore-mariadb.sh).
+# Full procedure: docs/disaster-recovery.md
+
+# Dev restore / seeding (ENV=dev). restore-* validate the S3 DR chain;
+# sync-* pull fresh over SSH (no S3). Whole-DB variants drop the local DB.
+make restore-local                      # Postgres: latest (or BACKUP_FILE=) S3 dump → local
+make sync-from-prod                     # Postgres: whole-DB pg_dump over SSH → local
+make pg-sync-schema SCHEMA=argo         # Postgres: one schema only (least-priv)
+make fpp-restore-local                  # MariaDB: latest (or BACKUP_FILE=) S3 dump → local
+make fpp-sync-from-prod                 # MariaDB: mariadb-dump over SSH → local
 ```
+
+App repos delegate their local DB seeding to these targets rather than
+re-implementing them — e.g. `free-planning-poker` calls `make -C ../vps fpp-sync-from-prod`,
+and `argo`'s `bun db:sync` calls `make -C ../vps pg-sync-schema SCHEMA=argo`.
 
 ---
 
@@ -418,7 +436,7 @@ op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d postgres
 make shell-postgres   # verify: SELECT version();
 ```
 
-**Postgres major upgrade (e.g., 18 → 19):** Dump with current version, update image tag in `compose.infra.yml`, restore into new container via `scripts/restore-pg.sh`. Always backup first.
+**Postgres major upgrade (e.g., 18 → 19):** Dump with current version, update image tag in `compose.infra.yml`, restore into new container via the gated `scripts/restore-pg.sh` (see `docs/disaster-recovery.md`). Always backup first.
 
 ---
 

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# MariaDB restore — pull dump from S3 → restore into running mariadb container.
-# Interactive: confirms destructive action before dropping the database.
+# MariaDB restore from S3 → OVERWRITES the PRODUCTION FPP database.
 #
-# Usage: make fpp-restore   (or invoke directly with op run)
+# THIS IS A LAST-RESORT DISASTER-RECOVERY TOOL. There is deliberately NO `make`
+# target for it. It is heavily gated (see guard below). Read
+# docs/disaster-recovery.md FIRST.
+#
+# Usage (human, deliberate):
+#   op run --env-file=.env.tpl -- ./apps/fpp/scripts/restore-mariadb.sh
 # Required env vars: MARIADB_DB, MARIADB_ROOT_PASSWORD, AWS_*
 # =============================================================================
 set -euo pipefail
@@ -21,13 +25,28 @@ echo
 read -rp "Enter exact filename to restore (e.g. mariadb_${MARIADB_DB}_20260505_030000.sql.gz): " BACKUP_FILE
 [[ -z "${BACKUP_FILE}" ]] && { echo "No filename — abort."; exit 1; }
 
+# ─── PRODUCTION RESTORE GUARD ────────────────────────────────────────────────
+# Overwrites PROD. No make target. Human-only. See docs/disaster-recovery.md.
+#   1. refuses on passwordless-sudo hosts (the VPS) unless BREAK_GLASS=1
+#   2. requires a real sudo password (proves a present human / local machine)
+#   3. requires typing the exact database name
 echo
-echo "============================================================"
-echo " DESTRUCTIVE: this will DROP and recreate database '${MARIADB_DB}'"
-echo " Source:      s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILE}"
-echo "============================================================"
+echo "##############################################################"
+echo "#  DANGER: about to DROP & RESTORE the PRODUCTION database.   #"
+echo " Source: s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILE}"
+echo "##############################################################"
+sudo -k 2>/dev/null || true
+if [[ "${BREAK_GLASS:-}" != "1" ]] && sudo -n true 2>/dev/null; then
+  echo "REFUSED: passwordless sudo detected — this looks like the VPS."
+  echo "Run from your local machine (password-protected sudo). For genuine"
+  echo "on-server DR, re-run with BREAK_GLASS=1. See docs/disaster-recovery.md."
+  exit 1
+fi
+echo "Authenticate as a human operator (sudo password required):"
+sudo -v
 read -rp "Type the database name to confirm: " CONFIRM
 [[ "${CONFIRM}" != "${MARIADB_DB}" ]] && { echo "Mismatch — abort."; exit 1; }
+# ─────────────────────────────────────────────────────────────────────────────
 
 log "Dropping and recreating ${MARIADB_DB}..."
 docker exec -i \
@@ -46,4 +65,4 @@ aws s3 cp "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILE}" - \
       -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" \
       mariadb mariadb -u root "${MARIADB_DB}"
 
-log "Restore complete. Re-run 'make fpp-mariadb-setup' to ensure fpp user grants are intact."
+log "Restore complete. Run 'make fpp-mariadb-setup' to ensure fpp user grants are intact."

@@ -38,10 +38,18 @@ make shell-postgres      # psql shell (uses op run with .env.tpl)
 make fpp-shell           # mariadb shell (uses op run with .env.tpl)
 make backup              # manual pg_dump → S3 (prod only — guarded)
 make fpp-backup          # manual mariadb-dump → S3 (prod only — guarded)
-make fpp-restore         # interactive mariadb restore from S3 (prod only)
-make fpp-restore-local   # dev — pull latest S3 backup into local mariadb (DR drill / seed)
-make fpp-sync-from-prod  # dev — direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
+
+# Dev — local seeding / DR from prod (all dev-only, never touch prod)
+make sync-from-prod      # whole-DB ssh+docker exec pg_dump from VPS → local (fresh, no S3). Drops whole local DB.
+make restore-local       # pull latest (or BACKUP_FILE=) S3 pg backup → local. Drops whole local DB.
+make pg-sync-schema SCHEMA=argo  # one schema only (least-priv, leaves other schemas intact)
+make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
+make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
 make firewall            # show UFW status and rules
+
+# Restoring PROD from S3 has NO make target by design (it overwrites production).
+# Gated, human-only DR scripts: scripts/restore-pg.sh + apps/fpp/scripts/restore-mariadb.sh
+# → see docs/disaster-recovery.md
 
 # Deploy config changes to server
 git push && ssh vps "cd ~/vps && git pull"
@@ -177,7 +185,7 @@ apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by
 apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel); fpp-server + fpp-analytics later
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
 apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 + Uptime Kuma push ping
-apps/fpp/scripts/restore-mariadb.sh  Restore from S3 (interactive confirmation, drops DB first)
+apps/fpp/scripts/restore-mariadb.sh  PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 apps/fpp/scripts/restore-mariadb-local.sh  Dev — non-interactive S3 → local mariadb (DR validation + seeding)
 apps/fpp/scripts/sync-mariadb-from-vps.sh  Dev — ssh vps + docker exec mariadb-dump → local mariadb (fresh, no S3)
 apps/fpp/scripts/cert-sync.sh        Extract *.${DOMAIN} cert from traefik/acme.json + FLUSH SSL
@@ -191,7 +199,10 @@ scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docke
 scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
-scripts/restore-pg.sh         Restore from S3 (interactive confirmation, drops DB first)
+scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
+scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
+scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)
+scripts/sync-pg-schema-from-vps.sh  Dev — generic per-schema sync (SCHEMA=argo); least-priv, app role only
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
 cron/pg-backup                Postgres backup, daily 03:00
 cron/pg-health                Postgres liveness heartbeat, every minute
@@ -267,10 +278,18 @@ Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `containe
 All apps share one database (`${POSTGRES_DB}`). Each app gets its own schema and a dedicated user with schema-only access. The superuser can JOIN across schemas natively.
 
 Pattern for new apps:
-1. Add `APP_DB_PASSWORD` to 1Password `vps` vault
+1. Add `APP_DB_PASSWORD` to 1Password `vps` vault, and the matching `<APP>_DB_PASSWORD` line to `.env.tpl`
 2. Add a setup block to `scripts/setup-postgres.sh` (CREATE SCHEMA + ROLE + GRANTs)
 3. Run `make postgres-setup`
 4. In compose: `DATABASE_URL: postgresql://app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=app`
+
+**Local dev seeding** (do not re-implement in the app repo — delegate to vps):
+`make pg-sync-schema SCHEMA=<app>` pulls just that schema from prod over SSH, using the
+app's own least-priv role. The convention is fixed: **role name == schema name**, and the
+password env var is **`UPPER(schema)_DB_PASSWORD`** (so `argo` → `ARGO_DB_PASSWORD`). App
+repos call `make -C ../vps pg-sync-schema SCHEMA=<app> ENV=dev` (argo's `bun db:sync` does
+exactly this). For a full local mirror of every schema, use `make sync-from-prod`
+(whole-DB) or `make restore-local` (whole-DB from S3, version-pickable).
 
 Current schemas:
 
@@ -400,4 +419,4 @@ op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d <service
 ```
 
 **Postgres major version (e.g., 18 → 19):**
-Use `scripts/restore-pg.sh` pattern: dump from old, update image tag in `compose.infra.yml`, restore into new. Or use `pg_upgrade` in place. Always test on a copy first.
+Use the gated `scripts/restore-pg.sh` pattern (see `docs/disaster-recovery.md`): dump from old, update image tag in `compose.infra.yml`, restore into new. Or use `pg_upgrade` in place. Always test on a copy first.
