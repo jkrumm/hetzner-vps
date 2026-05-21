@@ -285,6 +285,16 @@ Pattern for new apps:
 3. Run `make postgres-setup`
 4. In compose: `DATABASE_URL: postgresql://app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=app`
 
+**Migration journals — own schema, not the shared `drizzle` schema.** drizzle-kit
+(and Prisma) default the migration journal to a single `drizzle` schema owned by
+whichever app migrates first. On a shared cluster that's a cross-app collision
+*and* breaks after a whole-DB restore (`permission denied for schema drizzle`).
+Each Postgres app MUST keep its journal in its own schema: drizzle-kit →
+`migrations: { schema: '<app>' }` in `drizzle.config.ts` **and** `migrationsSchema`
+in the runtime `migrate()` call (Postgres-only option). Then the schema-owning
+role owns its journal — no extra grants needed here. Applied: argo
+(`argo.__drizzle_migrations`), basalt-ui-playground. N/A for FPP (own MariaDB).
+
 **Local dev seeding** (do not re-implement in the app repo — delegate to vps):
 `make pg-sync-schema SCHEMA=<app>` pulls just that schema from prod over SSH, using the
 app's own least-priv role. The convention is fixed: **role name == schema name**, and the

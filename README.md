@@ -379,7 +379,9 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
     environment:
-      DATABASE_URL: postgresql://<user>:<pass>@postgres:5432/<db>
+      # Shared cluster: append ?schema=<app>. Keep the migration journal in the
+      # app's own schema too (see "Postgres Schema Model" in CLAUDE.md).
+      DATABASE_URL: postgresql://<user>:<pass>@postgres:5432/<db>?schema=<app>
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4318
 ```
