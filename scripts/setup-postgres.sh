@@ -109,7 +109,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA argo GRANT ALL ON SEQUENCES TO argo;
 SQL
 
 # ---------------------------------------------------------------------------
-# Future apps: add blocks here following the same pattern
+# Future apps: add blocks here following the same pattern.
+#
+# Migration journals: each drizzle-kit app must keep its journal in its OWN
+# schema (set `migrations: { schema: '<app>' }` in drizzle.config.ts), not the
+# default shared `drizzle` schema. Then the role that owns the schema owns its
+# journal — no cross-app collision, no extra grants needed here.
 # ---------------------------------------------------------------------------
 
 echo "==> Postgres setup complete."
