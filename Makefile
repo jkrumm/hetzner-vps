@@ -14,6 +14,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
         photo-gallery-up photo-gallery-down \
+        modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         postgres-setup ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
@@ -203,6 +204,35 @@ argo-env: require-prod
 	op --account tkrumm inject -i apps/argo/.env.tpl -o apps/argo/.env -f
 	chmod 644 apps/argo/.env
 	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
+
+## modelpick stack (Bun + TanStack Start SSR, RollHook-managed) — apps/modelpick/compose.yml
+## Deploys to modelpick.jkrumm.com. RollHook deploys on push to jkrumm/modelpick:master.
+modelpick-up:   require-prod ; $(OP_RUN) docker compose -f apps/modelpick/compose.yml up -d
+modelpick-down: require-prod ; $(OP_RUN) docker compose -f apps/modelpick/compose.yml down
+## Materialize apps/modelpick/.env from .env.tpl (via `op inject`). Required so
+## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
+## can resolve ${VAR} interpolations in apps/modelpick/compose.yml. Re-run after
+## rotating any modelpick secret. Resulting .env is chmod 644 and gitignored.
+modelpick-env: require-prod
+	op --account tkrumm inject -i apps/modelpick/.env.tpl -o apps/modelpick/.env -f
+	chmod 644 apps/modelpick/.env
+	@echo "Wrote apps/modelpick/.env (chmod 644, gitignored)"
+## Apply Drizzle migrations inside the running container.
+modelpick-migrate: require-prod
+	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
+	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
+	docker exec "$$CONTAINER" bun run scripts/migrate.ts
+## Seed the model catalog (idempotent — safe to re-run).
+modelpick-seed: require-prod
+	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
+	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
+	docker exec "$$CONTAINER" bun run scripts/seed-run.ts
+## Manually trigger the daily data refresh (probe → collect → recommend → news).
+## In prod this runs via cron — see the deploy README for the cron entry.
+modelpick-refresh: require-prod
+	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
+	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
+	docker exec "$$CONTAINER" bun run scripts/refresh.ts
 
 ## photo-gallery stack — static Astro gallery served by nginx from a host volume.
 ## Content lives at /home/jkrumm/photo-gallery-dist on the VPS; photo-flow CLI on the

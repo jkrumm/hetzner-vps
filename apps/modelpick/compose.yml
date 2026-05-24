@@ -1,0 +1,78 @@
+---
+# modelpick — daily-refreshed LLM/TTS/STT model ranking dashboard.
+# Deployed at modelpick.jkrumm.com via Cloudflare Tunnel + Traefik.
+# RollHook manages zero-downtime rolling deploys (push to jkrumm/modelpick:master).
+# Shared VPS Postgres — schema modelpick, user modelpick.
+# Audio demos served from /var/lib/modelpick/demos (host volume, survives redeploys).
+#
+# Bootstrap order on a fresh server:
+#   1. make postgres-setup                  (creates modelpick role + schema)
+#   2. make modelpick-env                   (materializes apps/modelpick/.env)
+#   3. make modelpick-up                    (first run, pulls :latest image)
+#   4. docker exec <container> bun run scripts/migrate.ts   (apply DB migrations)
+#   5. docker exec <container> bun run scripts/seed-run.ts  (seed model catalog)
+#   6. add cron entry for daily refresh — see README deploy section
+
+networks:
+  proxy:
+    external: true
+  postgres-net:
+    external: true
+  monitoring-net:
+    external: true
+
+services:
+  modelpick:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/modelpick:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # IU unified endpoint
+      IU_API_KEY: ${IU_API_KEY}
+      IU_BASE_URL: ${IU_BASE_URL}
+      IU_OPENAI_BASE_URL: ${IU_OPENAI_BASE_URL}
+      # Shared VPS Postgres — schema modelpick
+      DATABASE_URL: postgresql://modelpick:${MODELPICK_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=modelpick
+      # External leaderboard APIs
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      ARTIFICIALANALYSIS_API_KEY: ${ARTIFICIALANALYSIS_API_KEY}
+      # Admin gate (lightweight — not a security boundary)
+      ADMIN_KEY: ${MODELPICK_ADMIN_KEY}
+      # Audio demo storage — volume-mounted so demos survive redeploys
+      DEMOS_DIR: /app/public/demos
+      # OpenTelemetry — unauthed :4319 port, docker-bridge only
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: modelpick
+    volumes:
+      # Audio demos persist across container restarts and RollHook redeploys.
+      - /var/lib/modelpick/demos:/app/public/demos
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.modelpick.rule=Host(`modelpick.${DOMAIN}`)"
+      - "traefik.http.routers.modelpick.entrypoints=websecure"
+      - "traefik.http.routers.modelpick.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.modelpick.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.modelpick.loadbalancer.server.port=3001"
+      - "traefik.http.services.modelpick.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.modelpick.loadbalancer.healthcheck.interval=10s"
+      # Managed by RollHook — Watchtower must not interfere.
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys.
+      - "rollhook.allowed_repos=jkrumm/modelpick"
+    networks:
+      - proxy
+      - postgres-net
+      - monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

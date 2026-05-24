@@ -109,6 +109,35 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA argo GRANT ALL ON SEQUENCES TO argo;
 SQL
 
 # ---------------------------------------------------------------------------
+# modelpick — schema: modelpick, user: modelpick
+# ---------------------------------------------------------------------------
+echo "--> modelpick"
+
+psql_main <<SQL
+CREATE SCHEMA IF NOT EXISTS modelpick;
+
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'modelpick') THEN
+    CREATE ROLE modelpick WITH LOGIN PASSWORD '${MODELPICK_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE modelpick WITH PASSWORD '${MODELPICK_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO modelpick;
+-- Required for drizzle-kit migrate: it runs CREATE SCHEMA IF NOT EXISTS internally,
+-- and PG checks CREATE ON DATABASE before the IF NOT EXISTS short-circuit.
+GRANT CREATE ON DATABASE "${POSTGRES_DB}" TO modelpick;
+GRANT USAGE, CREATE ON SCHEMA modelpick TO modelpick;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA modelpick TO modelpick;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA modelpick TO modelpick;
+ALTER DEFAULT PRIVILEGES IN SCHEMA modelpick GRANT ALL ON TABLES TO modelpick;
+ALTER DEFAULT PRIVILEGES IN SCHEMA modelpick GRANT ALL ON SEQUENCES TO modelpick;
+SQL
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern.
 #
 # Migration journals: each drizzle-kit app must keep its journal in its OWN
