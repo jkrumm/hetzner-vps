@@ -76,6 +76,9 @@ services:
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-DeepSeek-V4-Flash}
+      # Hermes chat upstream — Mac Mini OpenAI-compatible API over Tailscale (8642).
+      HERMES_BASE_URL: ${HERMES_BASE_URL}
+      HERMES_API_KEY: ${HERMES_API_KEY}
       # Docker socket proxies — VPS local + homelab over Tailscale.
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
