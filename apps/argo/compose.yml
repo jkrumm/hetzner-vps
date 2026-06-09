@@ -71,6 +71,11 @@ services:
       # GitLab — IU work on gitlab.com, read-only PAT (read_api + read_user).
       GITLAB_BASE_URL: ${GITLAB_BASE_URL:-https://gitlab.com}
       GITLAB_TOKEN: ${GITLAB_TOKEN}
+      # Hermes Chat AI gateway — DeepSeek v4 Flash thread titling, called directly
+      # on the IU unified endpoint (public HTTPS, EU/GDPR). Same creds local + prod.
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-DeepSeek-V4-Flash}
       # Docker socket proxies — VPS local + homelab over Tailscale.
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376

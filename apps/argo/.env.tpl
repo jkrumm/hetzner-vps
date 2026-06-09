@@ -44,6 +44,14 @@ JIRA_BOARD_ID=272
 GITLAB_BASE_URL=https://gitlab.com
 GITLAB_TOKEN=op://vps/argo/GITLAB_TOKEN
 
+# --- Hermes Chat AI gateway ---
+# DeepSeek v4 Flash (thread titling) on the IU unified endpoint's OpenAI
+# transport — public HTTPS, EU/GDPR (Azure Spain), reachable identically from
+# local dev and the prod VPS. Reuses the shared IU creds in op://common/anthropic.
+DEEPSEEK_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
+DEEPSEEK_API_KEY=op://common/anthropic/API_KEY
+DEEPSEEK_MODEL=DeepSeek-V4-Flash
+
 # --- Postgres (shared VPS postgres, schema `argo`) ---
 POSTGRES_DB=op://vps/config/POSTGRES_DB
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
