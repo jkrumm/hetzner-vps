@@ -47,14 +47,14 @@ GITLAB_TOKEN=op://vps/argo/GITLAB_TOKEN
 # --- Hermes Chat AI gateway ---
 # DeepSeek v4 Flash (thread titling) on the IU unified endpoint's OpenAI
 # transport — public HTTPS, EU/GDPR (Azure Spain), reachable identically from
-# local dev and the prod VPS. Reuses the shared IU creds in op://common/anthropic.
+# local dev and the prod VPS. Reuses the shared IU creds in the common/anthropic item.
 DEEPSEEK_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 DEEPSEEK_API_KEY=op://common/anthropic/API_KEY
 DEEPSEEK_MODEL=DeepSeek-V4-Flash
 
 # Chat upstream — Hermes agent (Mac Mini) OpenAI-compatible API over Tailscale
 # (port 8642). BASE_URL must include the /v1 prefix; the provider appends
-# /chat/completions. Stored as an op:// ref so the Mac-Mini tailnet host stays
+# /chat/completions. Stored as a 1Password ref so the Mac-Mini tailnet host stays
 # out of git. Reachable only with the tag:vps → tag:mac :8642 ACL grant AND
 # Hermes bound to the tailnet interface (not 127.0.0.1). Unset → chat 503s.
 HERMES_BASE_URL=op://vps/argo/HERMES_BASE_URL
