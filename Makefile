@@ -225,11 +225,12 @@ argo-env: require-prod
 research-gateway-up: require-prod
 	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=research-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
 	if [ -z "$$IMG" ]; then \
-	  echo "  ✗ research-gateway container not running — bootstrap via 'make research-gateway-bootstrap-image' then push to research-gateway master to trigger RollHook"; \
-	  exit 1; \
-	fi; \
-	echo "  pinning research-gateway → $$IMG"; \
-	$(OP_RUN) env RESEARCH_GATEWAY_IMAGE=$$IMG docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d
+	  echo "  no running container — genesis start from :latest (bootstrap-seeded)"; \
+	  $(OP_RUN) docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d; \
+	else \
+	  echo "  pinning research-gateway → $$IMG"; \
+	  $(OP_RUN) env RESEARCH_GATEWAY_IMAGE=$$IMG docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d; \
+	fi
 research-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env down
 
 ## Trigger a fresh RollHook deploy by pushing an empty commit to research-gateway's master.
