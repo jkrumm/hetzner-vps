@@ -20,7 +20,8 @@ TAVILY_API_KEY=op://common/tavily/API_KEY
 CONTEXT7_API_KEY=op://vps/research-gateway/CONTEXT7_API_KEY
 
 # Telemetry → argo
-ARGO_USAGE_URL=https://argo.jkrumm.com/api/usage/records
+# internal docker route — argo is Tailscale-only (grey-cloud); the container posts to argo-api directly, not the public host
+ARGO_USAGE_URL=http://argo-api:4000/usage/records
 ARGO_API_SECRET=op://common/api/SECRET
 
 RESEARCH_MAX_CONCURRENCY=3
