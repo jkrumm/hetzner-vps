@@ -12,8 +12,8 @@ IU_BASE_URL=op://common/anthropic/IU_BASE_URL
 IU_OPENAI_BASE_URL=op://common/anthropic/IU_OPENAI_BASE_URL
 
 # External leaderboard APIs
-OPENROUTER_API_KEY=op://vps/modelpick api secrets/OPENROUTER_API_KEY
-ARTIFICIALANALYSIS_API_KEY=op://vps/modelpick api secrets/ARTIFICIALANALYSIS_API_KEY
+OPENROUTER_API_KEY=op://vps/modelpick/OPENROUTER_API_KEY
+ARTIFICIALANALYSIS_API_KEY=op://vps/modelpick/ARTIFICIALANALYSIS_API_KEY
 
 # Admin gate
 MODELPICK_ADMIN_KEY=op://vps/modelpick/ADMIN_KEY
