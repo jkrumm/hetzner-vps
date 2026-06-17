@@ -13,6 +13,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         fpp-backup fpp-shell fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
+        research-gateway-up research-gateway-down research-gateway-env research-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
@@ -207,6 +208,52 @@ argo-env: require-prod
 	op --account tkrumm inject -i apps/argo/.env.tpl -o apps/argo/.env -f
 	chmod 644 apps/argo/.env
 	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
+
+## research-gateway stack (Bun research API, RollHook-managed) — apps/research-gateway/compose.yml
+## Deploys to research.jkrumm.com. RollHook deploys on push to jkrumm/research-gateway:master.
+##
+## research-gateway-up: recreate container WITHOUT pulling a new image. Reads the SHA
+## of the currently-running container and pins RESEARCH_GATEWAY_IMAGE to it. Use this
+## when you change apps/research-gateway/compose.yml (labels, mounts, env) and need the
+## changes applied without bumping the running code. To deploy new code, use
+## `make research-gateway-redeploy` (triggers RollHook via empty-commit push).
+##
+## Why this dance: RollHook tags pushed images by git SHA only — it does NOT
+## update the :latest tag. So a naive `docker compose up -d` would resolve
+## `${IMAGE_TAG:-...:latest}` and roll the running container back to a stale
+## :latest. Pinning to the running image avoids that regression.
+research-gateway-up: require-prod
+	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=research-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	if [ -z "$$IMG" ]; then \
+	  echo "  ✗ research-gateway container not running — bootstrap via 'make research-gateway-bootstrap-image' then push to research-gateway master to trigger RollHook"; \
+	  exit 1; \
+	fi; \
+	echo "  pinning research-gateway → $$IMG"; \
+	$(OP_RUN) env RESEARCH_GATEWAY_IMAGE=$$IMG docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d
+research-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env down
+
+## Trigger a fresh RollHook deploy by pushing an empty commit to research-gateway's master.
+## RollHook detects the push, rebuilds the image at the new SHA, and rolling-
+## restarts the container. Use this instead of `make research-gateway-up` when you want
+## new code (or when you just want compose.yml changes safely applied via a fresh build).
+research-gateway-redeploy: require-dev
+	@if [ ! -d $$HOME/SourceRoot/research-gateway ]; then echo "  ✗ research-gateway repo not found at ~/SourceRoot/research-gateway"; exit 1; fi
+	@cd $$HOME/SourceRoot/research-gateway && \
+	  git commit --allow-empty -m "chore: redeploy (triggered via vps make research-gateway-redeploy)" && \
+	  git push && \
+	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/research-gateway/actions"
+## One-shot bootstrap — clone research-gateway repo, build image, push :initial to
+## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
+## deploys against. Re-runnable.
+research-gateway-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/research-gateway/scripts/bootstrap-image.sh
+## Materialize apps/research-gateway/.env from .env.tpl. Required so RollHook's
+## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
+## rotating any research-gateway secret. Resulting .env is chmod 644 and gitignored.
+research-gateway-env: require-prod
+	op --account tkrumm inject -i apps/research-gateway/.env.tpl -o apps/research-gateway/.env -f
+	chmod 644 apps/research-gateway/.env
+	@echo "Wrote apps/research-gateway/.env (chmod 644, gitignored)"
 
 ## modelpick stack (Bun + TanStack Start SSR, RollHook-managed) — apps/modelpick/compose.yml
 ## Deploys to modelpick.jkrumm.com. RollHook deploys on push to jkrumm/modelpick:master.
