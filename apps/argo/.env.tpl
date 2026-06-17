@@ -52,6 +52,12 @@ DEEPSEEK_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 DEEPSEEK_API_KEY=op://common/anthropic/API_KEY
 DEEPSEEK_MODEL=DeepSeek-V4-Flash
 
+# Audio (STT + TTS) — native to Argo (replaces the Mac-Mini audio-proxy hop). STT
+# and the TTS prep LLM reuse the IU OpenAI creds above; Gemini expressive TTS uses
+# the native generateContent base below with the same IU key. The argo API image
+# must ship ffmpeg (apps/api/Dockerfile). Unset → STT works, TTS 503s.
+AUDIO_GEMINI_BASE_URL=op://common/anthropic/GEMINI_BASE_URL
+
 # Chat upstream — Hermes agent (Mac Mini) OpenAI-compatible API over Tailscale
 # (port 8642). BASE_URL must include the /v1 prefix; the provider appends
 # /chat/completions. Stored as a 1Password ref so the Mac-Mini tailnet host stays
