@@ -15,6 +15,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         argo-up argo-down argo-env argo-bootstrap-image \
         photo-gallery-up photo-gallery-down \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
+        audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
@@ -68,6 +69,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) fpp-up
 	$(MAKE) bun-email-api-up
 	$(MAKE) photo-gallery-up
+	$(MAKE) audio-gateway-up
 else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "→ Detected existing Redis/Valkey on :6379 — skipping the dev valkey service"; \
@@ -80,6 +82,7 @@ endif
 
 down:
 ifeq ($(ENV),prod)
+	$(MAKE) audio-gateway-down
 	$(MAKE) photo-gallery-down
 	$(MAKE) bun-email-api-down
 	$(MAKE) fpp-down
@@ -233,6 +236,25 @@ modelpick-refresh: require-prod
 	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
 	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
 	docker exec "$$CONTAINER" bun run scripts/refresh.ts
+
+## audio-gateway stack (Bun audio service, RollHook-managed) — apps/audio-gateway/compose.yml
+## Tailscale-only via DNS-only A record audio-gateway.jkrumm.com → ${VPS_TAILSCALE_IP}.
+## RollHook deploys on push to jkrumm/audio-gateway:master.
+audio-gateway-up:   require-prod ; $(OP_RUN) docker compose -f apps/audio-gateway/compose.yml up -d
+audio-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/audio-gateway/compose.yml down
+## Materialize apps/audio-gateway/.env from .env.tpl (via `op inject`). Required so
+## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
+## can resolve ${VAR} interpolations in apps/audio-gateway/compose.yml. Re-run after
+## rotating any audio-gateway secret. Resulting .env is chmod 644 and gitignored.
+audio-gateway-env: require-prod
+	op --account tkrumm inject -i apps/audio-gateway/.env.tpl -o apps/audio-gateway/.env -f
+	chmod 644 apps/audio-gateway/.env
+	@echo "Wrote apps/audio-gateway/.env (chmod 644, gitignored)"
+## One-shot bootstrap — clone audio-gateway repo, build, and push :initial to
+## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
+## deploys against. Re-runnable.
+audio-gateway-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/audio-gateway/scripts/bootstrap-image.sh
 
 ## photo-gallery stack — static Astro gallery served by nginx from a host volume.
 ## Content lives at /home/jkrumm/photo-gallery-dist on the VPS; photo-flow CLI on the
