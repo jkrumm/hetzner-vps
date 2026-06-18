@@ -34,6 +34,13 @@ services:
       IU_GEMINI_BASE_URL: ${IU_GEMINI_BASE_URL}
       USAGE_DB: ${USAGE_DB}
       STT_PROMPT: ${STT_PROMPT}
+      # Usage telemetry → Argo: 'both' keeps the local SQLite and pushes each request
+      # to argo-api over the shared proxy net (internal route, mirrors research-gateway).
+      USAGE_SINK: ${USAGE_SINK}
+      USAGE_HTTP_URL: ${USAGE_HTTP_URL}
+      USAGE_SOURCE_LABEL: ${USAGE_SOURCE_LABEL}
+      ARGO_API_SECRET: ${ARGO_API_SECRET}
+      MACHINE: ${MACHINE}
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.
       - /var/lib/audio-gateway:/data
