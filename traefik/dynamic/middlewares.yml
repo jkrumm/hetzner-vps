@@ -19,7 +19,10 @@ http:
         contentTypeNosniff: true
         browserXssFilter: true
         referrerPolicy: "strict-origin-when-cross-origin"
-        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()"
+        # microphone=(self): own-origin only (still gated by the browser permission
+        # prompt; cross-origin/embedded iframes stay blocked). Argo's voice input
+        # (getUserMedia) needs it; camera/geolocation/payment stay fully disabled.
+        permissionsPolicy: "camera=(), microphone=(self), geolocation=(), payment=()"
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
