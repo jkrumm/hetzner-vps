@@ -44,6 +44,11 @@ JIRA_BOARD_ID=272
 GITLAB_BASE_URL=https://gitlab.com
 GITLAB_TOKEN=op://vps/argo/GITLAB_TOKEN
 
+# Hardcover — book taste layer for the Reading vertical. argo's hardcover-sync
+# cron + POST /reading/sync pull the shelf. Backend-only GraphQL bearer (bare
+# JWT, 60 req/min). Without it the cron is skipped and sync returns errors.
+HARDCOVER_API_KEY=op://vps/argo/HARDCOVER_API_KEY
+
 # --- Hermes Chat AI gateway ---
 # DeepSeek v4 Flash (thread titling) on the IU unified endpoint's OpenAI
 # transport — public HTTPS, EU/GDPR (Azure Spain), reachable identically from

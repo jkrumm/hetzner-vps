@@ -71,6 +71,9 @@ services:
       # GitLab — IU work on gitlab.com, read-only PAT (read_api + read_user).
       GITLAB_BASE_URL: ${GITLAB_BASE_URL:-https://gitlab.com}
       GITLAB_TOKEN: ${GITLAB_TOKEN}
+      # Hardcover — book taste layer. Reading vertical's hardcover-sync cron +
+      # /reading/sync pull the shelf. Backend-only GraphQL bearer (bare JWT).
+      HARDCOVER_API_KEY: ${HARDCOVER_API_KEY}
       # Hermes Chat AI gateway — DeepSeek v4 Flash thread titling, called directly
       # on the IU unified endpoint (public HTTPS, EU/GDPR). Same creds local + prod.
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
