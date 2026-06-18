@@ -8,7 +8,7 @@ DOMAIN=op://vps/config/DOMAIN
 USAGE_DB=/data/usage.db
 STT_PROMPT=Die Aufnahme ist auf Deutsch oder Englisch.
 # Usage telemetry → Argo. 'both' = local SQLite + push. Internal docker route over the
-# shared proxy net; ARGO_API_SECRET must match argo-api's API_SECRET (same op:// ref).
+# shared proxy net; ARGO_API_SECRET must match argo-api's API_SECRET (same 1Password item).
 USAGE_SINK=both
 USAGE_HTTP_URL=http://argo-api:4000/usage/records
 USAGE_SOURCE_LABEL=audio-gateway
