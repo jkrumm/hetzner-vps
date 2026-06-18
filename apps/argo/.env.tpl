@@ -59,7 +59,7 @@ DEEPSEEK_MODEL=DeepSeek-V4-Flash
 
 # Audio (STT + TTS) — forwarded to the audio-gateway service (the single source of
 # truth for audio), reachable in-cluster on the shared `proxy` network. Non-secret
-# internal URL, so hardcoded rather than an op:// ref. No depends_on across stacks;
+# internal URL, so hardcoded rather than a 1Password ref. No depends_on across stacks;
 # if the gateway is down the audio routes 503 (Argo tolerates it).
 AUDIO_GATEWAY_URL=http://audio-gateway:7714
 
