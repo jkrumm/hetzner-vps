@@ -14,28 +14,43 @@
 #
 # When to use the S3 path instead: validating the actual DR chain works.
 #
+# Needs NO local 1Password access, so it runs anywhere — headless Mac mini
+# included. Both halves resolve their own credentials where they already live:
+#   - PROD: the VPS resolves MARIADB_ROOT_PASSWORD itself via its op service
+#     account, inside the `ssh vps ... op run` below. Nothing prod ever reaches
+#     this machine except the dump on stdout.
+#   - LOCAL: the root password is read from the dev container's OWN environment
+#     (compose.dev.yml started it with MARIADB_ROOT_PASSWORD already set), so
+#     the credential never enters the host shell. Same trick as fpp's
+#     scripts/db-setup-local.sh.
+#
 # Prerequisites:
 #   - `ssh vps` resolves (Tailscale up + SSH config in ~/.ssh/config).
 #   - Local `mariadb` container running (make up).
-#   - Local + remote MARIADB_DB / root password match (they do — same op item).
 #
 # Usage:  make fpp-sync-from-prod
-#
-# Required local env (resolved by op run --env-file=.env.tpl):
-#   MARIADB_DB, MARIADB_ROOT_PASSWORD  (used to recreate + restore locally)
 # =============================================================================
 set -euo pipefail
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
-docker inspect -f '{{.State.Status}}' mariadb >/dev/null 2>&1 || {
-  echo "ERROR: local 'mariadb' container not running. Run 'make up' first."; exit 1;
+CONTAINER="${MARIADB_CONTAINER:-mariadb}"
+
+docker inspect -f '{{.State.Status}}' "$CONTAINER" >/dev/null 2>&1 || {
+  echo "ERROR: local '$CONTAINER' container not running. Run 'make up' first."; exit 1;
 }
 
+# Database name (not a secret) — take it from the container unless overridden.
+MARIADB_DB="${MARIADB_DB:-$(docker exec "$CONTAINER" printenv MARIADB_DATABASE)}"
+[[ -n "${MARIADB_DB}" ]] || { echo "ERROR: could not resolve MARIADB_DB."; exit 1; }
+
+# In every `docker exec` below the `sh -c` body is single-quoted so the HOST
+# shell leaves it alone — $MARIADB_ROOT_PASSWORD expands inside the container,
+# from the container's env. Heredocs/SQL stay unquoted so the host expands the
+# values it does own (the DB name).
 log "Recreating local database ${MARIADB_DB}..."
-docker exec -i \
-  -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" \
-  mariadb mariadb -u root <<SQL
+docker exec -i "$CONTAINER" \
+  sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb -u root' <<SQL
 DROP DATABASE IF EXISTS \`${MARIADB_DB}\`;
 CREATE DATABASE \`${MARIADB_DB}\`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -57,14 +72,14 @@ ssh vps 'cd ~/vps && op run --env-file=.env.tpl -- bash -c "
   | gzip
 "' \
   | gunzip \
-  | docker exec -i \
-      -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" \
-      mariadb mariadb -u root "${MARIADB_DB}"
+  | docker exec -i "$CONTAINER" \
+      sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb -u root "$1"' \
+      sh "${MARIADB_DB}"
 
 log "Sync complete. Table summary:"
-docker exec -i \
-  -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" \
-  mariadb mariadb -u root "${MARIADB_DB}" -e "
+docker exec -i "$CONTAINER" \
+  sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb -u root "$1" -e "$2"' \
+  sh "${MARIADB_DB}" "
 SELECT TABLE_NAME, TABLE_ROWS
   FROM information_schema.TABLES
  WHERE TABLE_SCHEMA='${MARIADB_DB}'

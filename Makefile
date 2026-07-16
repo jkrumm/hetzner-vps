@@ -135,8 +135,11 @@ fpp-backup: require-prod
 fpp-restore-local: require-dev
 	$(OP_RUN) ./apps/fpp/scripts/restore-mariadb-local.sh
 ## Dev — fresh sync from prod mariadb over SSH (no S3). Re-runnable.
+# No OP_RUN: the VPS resolves the prod credentials remotely (inside the script's
+# `ssh vps ... op run`), and the local half reads the dev container's own env.
+# That keeps this runnable on the headless mini, where op has no biometric.
 fpp-sync-from-prod: require-dev
-	$(OP_RUN) ./apps/fpp/scripts/sync-mariadb-from-vps.sh
+	./apps/fpp/scripts/sync-mariadb-from-vps.sh
 ## Interactive mariadb shell — works in both envs (resolves the local mariadb container).
 fpp-shell:
 	$(OP_RUN) sh -c 'docker exec -it -e MYSQL_PWD="$$MARIADB_ROOT_PASSWORD" mariadb mariadb -u root "$$MARIADB_DB"'
