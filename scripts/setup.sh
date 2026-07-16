@@ -275,19 +275,23 @@ else
 fi
 
 # =============================================================================
-# 9. Private registry login (registry.jkrumm.com / Zot)
+# 9. Private registry login (rollhook.jkrumm.com — RollHook's built-in Zot)
 # Stores credentials in ~/.docker/config.json — Docker Compose picks them up
-# automatically when pulling images from registry.jkrumm.com.
-# Requires: OP_SERVICE_ACCOUNT_TOKEN set with access to common vault.
+# automatically when pulling images from rollhook.jkrumm.com.
+# The registry password IS ROLLHOOK_SECRET: RollHook derives Zot's credential
+# from it directly (registry.ZotPassword() is the identity function) and writes
+# the bcrypt hash to .htpasswd on every start. The username is the hardcoded
+# internal ZotUser, "rollhook". There is no separate registry secret.
+# Requires: OP_SERVICE_ACCOUNT_TOKEN set with access to the vps vault.
 # =============================================================================
-if op read "op://common/zot/PASSWORD" &>/dev/null; then
-  log "Logging into private registry (registry.jkrumm.com)..."
+if op read "op://vps/rollhook/SECRET" &>/dev/null; then
+  log "Logging into private registry (rollhook.jkrumm.com)..."
   su - "${DEPLOY_USER}" -c \
-    "op read 'op://common/zot/PASSWORD' \
-     | docker login registry.jkrumm.com -u jkrumm --password-stdin"
+    "op read 'op://vps/rollhook/SECRET' \
+     | docker login rollhook.jkrumm.com -u rollhook --password-stdin"
 else
-  warn "ZOT_PASSWORD not accessible in 1Password — skipping private registry login."
-  warn "Ensure OP_SERVICE_ACCOUNT_TOKEN is set and has access to the common vault."
+  warn "op://vps/rollhook/SECRET not accessible — skipping private registry login."
+  warn "Ensure OP_SERVICE_ACCOUNT_TOKEN is set and has access to the vps vault."
 fi
 
 # =============================================================================
