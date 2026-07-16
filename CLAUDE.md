@@ -97,7 +97,7 @@ Key variables:
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `UPTIME_KUMA_POSTGRES_PUSH_URL` | `scripts/health-pg.sh` — per-minute Postgres liveness heartbeat (separate monitor from pg-backup) |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
-| `ZOT_PASSWORD` | Private registry auth (`docker login rollhook.jkrumm.com`) — in `common` vault |
+| `ROLLHOOK_SECRET` | RollHook admin token **and** the registry password — `docker login rollhook.jkrumm.com -u rollhook`. RollHook derives Zot's credential from it (identity function) and writes .htpasswd on start; there is no separate registry secret. In `vps` vault. |
 | `VPS_TAILSCALE_IP` | Traefik port binding (`${VPS_TAILSCALE_IP}:443:443`) — Tailscale-only dashboard access |
 | `BESZEL_AGENT_KEY` | Beszel agent `KEY` env var |
 | `EXPRESS_SESSION_SECRET` | HyperDX session encryption — `openssl rand -hex 32` |

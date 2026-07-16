@@ -6,7 +6,7 @@
 # Idempotent — re-running just rebuilds and re-pushes.
 #
 # Run via:  make bun-email-api-bootstrap-image
-# Requires: ZOT_PASSWORD in env (provided by op run via the Make target).
+# Requires: ROLLHOOK_SECRET in env (provided by op run via the Make target).
 
 set -euo pipefail
 

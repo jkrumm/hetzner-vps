@@ -59,9 +59,6 @@ AWS_SECRET_ACCESS_KEY=op://common/backblaze-s3/SECRET_ACCESS_KEY
 AWS_S3_BUCKET=op://common/backblaze-s3/BUCKET
 AWS_S3_ENDPOINT=op://common/backblaze-s3/ENDPOINT
 
-# --- Registry ---
-ZOT_PASSWORD=op://common/zot/PASSWORD
-
 # --- Monitoring ---
 UPTIME_KUMA_PUSH_URL=op://vps/config/UPTIME_KUMA_PUSH_URL
 UPTIME_KUMA_FPP_BACKUP_PUSH_URL=op://vps/config/UPTIME_KUMA_FPP_BACKUP_PUSH_URL

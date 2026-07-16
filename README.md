@@ -332,8 +332,7 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 
 | Variable | Value | How to get |
 |-|-|-|
-| `ROLLHOOK_SECRET` | `<generated>` | In 1Password: `vps/rollhook/SECRET` |
-| `ZOT_PASSWORD` | `<generated>` | In 1Password: `common/zot/PASSWORD` — used for `docker login rollhook.jkrumm.com` |
+| `ROLLHOOK_SECRET` | `<generated>` | In 1Password: `vps/rollhook/SECRET`. Doubles as the registry password — `docker login rollhook.jkrumm.com -u rollhook --password-stdin`. RollHook derives Zot's credential from it directly; there is no separate registry secret. |
 | `SLACK_WEBHOOK_URL` | reuses `SLACK_WATCHTOWER_URL` | Deploy success/failure pings to Slack `#updates`. No new op item — points at `op://common/slack/WATCHTOWER_URL`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://clickstack:4319` | Unauthed OTLP HTTP receiver on the docker bridge (see `clickstack/otel-custom.yaml`). RollHook is on `monitoring-net` to reach it. |
 | `DEPLOY_ENVIRONMENT` | `prod` | Tag attached to deploy logs/markers. |
