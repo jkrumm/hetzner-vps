@@ -41,7 +41,7 @@ log "Starting backup: ${BACKUP_FILENAME}"
 # Stream mariadb-dump → gzip → S3, all in-process (no temp file).
 # --single-transaction: consistent InnoDB snapshot without table locks.
 # --routines + --triggers + --events: include stored procs, triggers, scheduled events.
-# --ssl-verify-server-cert=0: server cert is *.${DOMAIN}, internal hostname is `mariadb`.
+# --ssl-verify-server-cert=0: server cert is *.free-planning-poker.com, internal hostname is `mariadb`.
 #   Encryption still applies (require-secure-transport=ON), only hostname check is skipped —
 #   acceptable on the private mariadb-net Docker network.
 docker run --rm \

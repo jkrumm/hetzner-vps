@@ -178,7 +178,7 @@ ssh vps "
 External reachability + TLS cert from a fresh-eyes perspective:
 
 ```bash
-echo | openssl s_client -connect fpp-db.jkrumm.com:33306 -starttls mysql -servername fpp-db.jkrumm.com 2>&1 | grep -E 'subject=|issuer=|Verification'
+echo | openssl s_client -connect db.free-planning-poker.com:33306 -starttls mysql -servername db.free-planning-poker.com 2>&1 | grep -E 'subject=|issuer=|Verification'
 ```
 
 **Thresholds:**
@@ -227,7 +227,7 @@ mariadb:  running X, latest Y — <up to date / upgrade available>
 ## [9/9] FPP MariaDB Exception 🟢/🟡/🔴
 fail2ban jail: <active / inactive>, banned now: N, total banned: M
 TLS enforced: <yes/no>, cert valid until: <date>
-External TLS verify (fpp-db.jkrumm.com): <OK / FAILED>
+External TLS verify (db.free-planning-poker.com): <OK / FAILED>
 
 ## Recommendations
 - [CRITICAL] <finding> → <proposed fix>

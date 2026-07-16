@@ -29,7 +29,7 @@ make fpp-up      / make fpp-down
 make postgres-setup      # run after make infra-up, before make monitoring-up
 make fpp-mariadb-setup   # run after make fpp-up
 
-# FPP TLS cert sync (extracts *.${DOMAIN} from traefik/acme.json into apps/fpp/certs/)
+# FPP TLS cert sync (extracts *.free-planning-poker.com from traefik/acme.json into apps/fpp/certs/)
 make fpp-cert-sync       # run once after networking-up; cron does it every 6h
 
 # Status + ops
@@ -189,7 +189,7 @@ apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 + Uptime Kuma push ping
 apps/fpp/scripts/restore-mariadb.sh  PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 apps/fpp/scripts/restore-mariadb-local.sh  Dev — non-interactive S3 → local mariadb (DR validation + seeding)
 apps/fpp/scripts/sync-mariadb-from-vps.sh  Dev — ssh vps + docker exec mariadb-dump → local mariadb (fresh, no S3)
-apps/fpp/scripts/cert-sync.sh        Extract *.${DOMAIN} cert from traefik/acme.json + FLUSH SSL
+apps/fpp/scripts/cert-sync.sh        Extract *.free-planning-poker.com cert from traefik/acme.json + FLUSH SSL
 apps/fpp/fail2ban/                   filter + jail configs installed by setup.sh
 apps/fpp/certs/                      gitignored — populated by cert-sync.sh, mounted RO into mariadb
 config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
@@ -249,16 +249,16 @@ Single-tenant database for Free Planning Poker. Lives outside `compose.infra.yml
 Defenses on the open port:
 
 - `--require-secure-transport=ON` and `REQUIRE SSL` on the `fpp@'%'` user — no plaintext, ever.
-- TLS cert is the wildcard `*.${DOMAIN}` from Traefik's ACME — extracted by `apps/fpp/scripts/cert-sync.sh` (cron every 6h, `FLUSH SSL` on rotation, no restart).
+- TLS cert is the wildcard `*.free-planning-poker.com` from Traefik's ACME — extracted by `apps/fpp/scripts/cert-sync.sh` (cron every 6h, `FLUSH SSL` on rotation, no restart).
 - fail2ban watches mariadb container's journald logs (`CONTAINER_TAG=mariadb`) and bans repeated auth failures at the iptables `DOCKER-USER` chain (UFW does NOT apply to Docker-published ports — `DOCKER-USER` is what works).
 - Schema-scoped user — `fpp@'%'` has `ALL PRIVILEGES` on `${MARIADB_DB}` only, no other DBs, no admin grants.
 - `mariadb-dump` backup runs on the internal `mariadb-net` (no public roundtrip).
 
-DNS: `fpp-db.${DOMAIN}` is a **DNS-only A record** (grey cloud) → VPS public IP. Cloudflare can't proxy MySQL anyway, so DNS-only is correct — and CGNAT considerations don't apply since this hits the public IP, not the Tailscale IP.
+DNS: `db.free-planning-poker.com` is a **DNS-only A record** (grey cloud) → VPS public IP. Cloudflare can't proxy MySQL anyway, so DNS-only is correct — and CGNAT considerations don't apply since this hits the public IP, not the Tailscale IP.
 
 Vercel connection string:
 ```
-mysql://fpp:<password>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUnauthorized":true}
+mysql://fpp:<password>@db.free-planning-poker.com:33306/free-planning-poker?ssl={"rejectUnauthorized":true}
 ```
 
 ### FPP application services
@@ -271,7 +271,7 @@ mysql://fpp:<password>@fpp-db.${DOMAIN}:33306/free-planning-poker?ssl={"rejectUn
 | `fpp-analytics` | `rollhook.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
 | `fpp-analytics-updater` | same as fpp-analytics | `mariadb-net` | manual `docker compose up -d` after image change |
 
-Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.${DOMAIN}` doesn't match the `mariadb` hostname). See `apps/fpp/MIGRATION.md` for the bootstrap and cutover runbook.
+Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.free-planning-poker.com` doesn't match the `mariadb` hostname). See `apps/fpp/MIGRATION.md` for the bootstrap and cutover runbook.
 
 ---
 
@@ -412,7 +412,7 @@ bash /home/jkrumm/vps/scripts/setup.sh
 8. `make up` → starts everything (idempotent — re-runs networking-up too)
 9. `make postgres-setup` → provision Postgres schemas/users
 10. `make fpp-mariadb-setup` → provision MariaDB fpp user + grants
-11. Add DNS-only A record `fpp-db.${DOMAIN}` → VPS public IP (grey cloud — not proxied)
+11. Add DNS-only A record `db.free-planning-poker.com` → VPS public IP (grey cloud — not proxied)
 12. `reboot` → verify kernel updated, all containers restart automatically
 
 **Note:** HostingFuchs has no panel firewall. UFW + sshd Tailscale binding is sufficient for everything except MariaDB. **Docker bypasses UFW for published ports**, so TCP 33306 is publicly reachable as soon as `make fpp-up` runs — no firewall change needed. fail2ban watches MariaDB auth failures via journald and bans source IPs at the iptables `DOCKER-USER` chain (which Docker DOES evaluate before its NAT rules).

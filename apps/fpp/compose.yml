@@ -13,8 +13,8 @@
 # 10-min polling cron, brief restart is fine).
 #
 # Bootstrap order on a fresh server:
-#   1. make networking-up           (Traefik gets *.${DOMAIN} cert via DNS-01)
-#   2. make fpp-cert-sync           (extracts wildcard cert into apps/fpp/certs/)
+#   1. make networking-up           (Traefik gets *.free-planning-poker.com cert via DNS-01)
+#   2. make fpp-cert-sync           (extracts that wildcard cert into apps/fpp/certs/)
 #   3. make fpp-up                  (MariaDB starts, refuses to start without certs)
 #   4. make fpp-mariadb-setup       (provisions fpp user + grants)
 #   5. Manual one-shot: docker login rollhook.jkrumm.com, build+push initial
@@ -61,7 +61,7 @@ services:
     # Public exposure for Vercel. Cloudflare Tunnel can't proxy raw MySQL protocol
     # (TCP origins require cloudflared/WARP client; Spectrum is Enterprise-only).
     # Mitigations: TLS required (--require-secure-transport), schema-scoped fpp user,
-    # fail2ban on auth failures, no remote root. DNS-only A record fpp-db.${DOMAIN}.
+    # fail2ban on auth failures, no remote root. DNS-only A record db.free-planning-poker.com.
     ports:
       - "33306:3306"
     volumes:
@@ -191,10 +191,10 @@ services:
   #
   # Connects to mariadb on the internal mariadb-net. MariaDB enforces TLS via
   # --require-secure-transport=ON so DB_SSL=true is mandatory. The wildcard cert
-  # is *.${DOMAIN} which doesn't match the 'mariadb' hostname, hence
+  # is *.free-planning-poker.com which doesn't match the 'mariadb' hostname, hence
   # DB_SSL_VERIFY=false. This is internal-network-only TLS (encryption without
   # peer auth), which is acceptable here — exposure is bounded by Docker's
-  # internal network. Vercel uses fpp-db.${DOMAIN}:33306 with full verify.
+  # internal network. Vercel uses db.free-planning-poker.com:33306 with full verify.
   # ---------------------------------------------------------------------------
   fpp-analytics-updater:
     # Separate image name (same content as fpp-analytics) so RollHook's

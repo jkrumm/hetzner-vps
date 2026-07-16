@@ -30,7 +30,7 @@ make pg-sync-schema SCHEMA=argo # one schema only (least-priv, leaves other sche
 make fpp-up                  # start MariaDB (and fpp-server / fpp-analytics later)
 make fpp-down
 make fpp-mariadb-setup       # provision fpp user + grants (idempotent)
-make fpp-cert-sync           # extract *.${DOMAIN} cert for MariaDB TLS
+make fpp-cert-sync           # extract *.free-planning-poker.com cert for MariaDB TLS
 make fpp-backup              # manual mariadb-dump → S3
 make fpp-shell               # mariadb shell as root
 
@@ -228,7 +228,7 @@ make fpp-mariadb-setup    # provision MariaDB fpp user + grants
 
 Verify: `make ps` — all containers should be running within ~30 seconds.
 
-Add a DNS-only A record `fpp-db.${DOMAIN}` → VPS public IP (grey cloud, **not** proxied — Cloudflare can't proxy MySQL).
+Add a DNS-only A record `db.free-planning-poker.com` → VPS public IP (grey cloud, **not** proxied — Cloudflare can't proxy MySQL).
 
 ### 9. Photo gallery host directory
 
@@ -283,7 +283,7 @@ Apps create their own users and databases on top of this superuser.
 
 **MariaDB (FPP)**
 
-Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it's exposed publicly on TCP 33306 — the deviation is quarantined out of shared infra. Vercel connects with `?ssl={"rejectUnauthorized":true}` against `fpp-db.${DOMAIN}`.
+Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it's exposed publicly on TCP 33306 — the deviation is quarantined out of shared infra. Vercel connects with `?ssl={"rejectUnauthorized":true}` against `db.free-planning-poker.com`.
 
 | Variable | Value | How to get |
 |-|-|-|

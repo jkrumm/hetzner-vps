@@ -60,7 +60,7 @@ log "Streaming mariadb-dump from VPS over SSH (TLS skipped on internal docker ne
 # Remote command: VPS resolves its own secrets via op service account, runs
 # docker exec → mariadb-dump → gzip. Stdout flows back through SSH to our pipe.
 # --ssl-verify-server-cert=0 matches backup-mariadb.sh — the wildcard cert CN
-# (*.${DOMAIN}) doesn't match the internal hostname `mariadb`, but encryption
+# (*.free-planning-poker.com) doesn't match the internal hostname `mariadb`, but encryption
 # still applies via --require-secure-transport=ON.
 ssh vps 'cd ~/vps && op run --env-file=.env.tpl -- bash -c "
   docker exec -e MYSQL_PWD=\"\$MARIADB_ROOT_PASSWORD\" mariadb mariadb-dump \
