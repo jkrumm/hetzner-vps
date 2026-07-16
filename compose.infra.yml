@@ -48,12 +48,14 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   # ---------------------------------------------------------------------------
-  # Valkey 9 — Redis-compatible cache and queue backend.
+  # Valkey 9.1 — Redis-compatible cache and queue backend.
   # container_name: redis so apps can connect via redis:6379 unchanged.
-  # Pinned to major version. Update manually.
+  # Pinned to the minor line, NOT the bare major: the `9` tag floats across minors
+  # (it resolved to 9.1.0 while 9.0.x was still current), so a routine pull would
+  # silently jump a minor. Update manually.
   # ---------------------------------------------------------------------------
   valkey:
-    image: valkey/valkey:9
+    image: valkey/valkey:9.1
     container_name: redis
     restart: unless-stopped
     security_opt:
