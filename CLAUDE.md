@@ -28,6 +28,7 @@ make fpp-up      / make fpp-down
 # DB schema/user provisioning — idempotent, works for both envs
 make postgres-setup      # run after make infra-up, before make monitoring-up
 make fpp-mariadb-setup   # run after make fpp-up
+make cron-env-seed       # materialize /etc/vps/*.env for cron jobs from 1Password (re-run after secret rotation)
 
 # FPP TLS cert sync (extracts *.free-planning-poker.com from traefik/acme.json into apps/fpp/certs/)
 make fpp-cert-sync       # run once after networking-up; cron does it every 6h
@@ -206,8 +207,10 @@ scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB rest
 scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)
 scripts/sync-pg-schema-from-vps.sh  Dev — generic per-schema sync (SCHEMA=argo); least-priv, app role only
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
+scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed
 cron/pg-backup                Postgres backup, daily 03:00
-cron/pg-health                Postgres liveness heartbeat, every minute
+cron/pg-health                Postgres liveness heartbeat, every minute — sources /etc/vps/pg-health.env (no op run — rate limits)
+cron/pg-health.env.tpl        op template for the seeded pg-health cron env (materialized via make cron-env-seed)
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
@@ -412,8 +415,9 @@ bash /home/jkrumm/vps/scripts/setup.sh
 8. `make up` → starts everything (idempotent — re-runs networking-up too)
 9. `make postgres-setup` → provision Postgres schemas/users
 10. `make fpp-mariadb-setup` → provision MariaDB fpp user + grants
-11. Add DNS-only A record `db.free-planning-poker.com` → VPS public IP (grey cloud — not proxied)
-12. `reboot` → verify kernel updated, all containers restart automatically
+11. `make cron-env-seed` → materialize /etc/vps/*.env for cron jobs from 1Password
+12. Add DNS-only A record `db.free-planning-poker.com` → VPS public IP (grey cloud — not proxied)
+13. `reboot` → verify kernel updated, all containers restart automatically
 
 **Note:** HostingFuchs has no panel firewall. UFW + sshd Tailscale binding is sufficient for everything except MariaDB. **Docker bypasses UFW for published ports**, so TCP 33306 is publicly reachable as soon as `make fpp-up` runs — no firewall change needed. fail2ban watches MariaDB auth failures via journald and bans source IPs at the iptables `DOCKER-USER` chain (which Docker DOES evaluate before its NAT rules).
 

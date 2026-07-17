@@ -314,6 +314,19 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 | `AWS_S3_ENDPOINT` | `https://...` | S3-compatible provider endpoint URL |
 | `UPTIME_KUMA_PUSH_URL` | `https://...` | Uptime Kuma → Add monitor → Push type → copy URL |
 
+**Cron env seeding**
+
+Cron jobs that run at high frequency must not call `op` per run — 1Password rate-limits
+that frequency, and this is exactly how the pg-health liveness monitor died. Instead,
+their env is seeded once from 1Password into `/etc/vps/<job>.env` (chmod 600, owned by
+`jkrumm`, outside the repo tree) via `make cron-env-seed`, sourced from
+`cron/<job>.env.tpl`. 1Password stays the source of truth — after rotating any
+referenced secret, re-run `make cron-env-seed`.
+
+| Variable | Value | How to get |
+|-|-|-|
+| `UPTIME_KUMA_POSTGRES_PUSH_URL` | `https://...` | Uptime Kuma push monitor for the per-minute Postgres liveness check. Seeded into `/etc/vps/pg-health.env`. |
+
 **Watchtower (Slack notifications)**
 
 | Variable | Value | How to get |

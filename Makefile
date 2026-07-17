@@ -17,7 +17,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         photo-gallery-up photo-gallery-down \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
-        postgres-setup ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
+        postgres-setup cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -318,6 +318,11 @@ photo-gallery-down: require-prod ; $(OP_RUN) docker compose -f apps/photo-galler
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:
 	$(OP_RUN) ./scripts/setup-postgres.sh
+
+## Materialize /etc/vps/*.env for cron jobs from cron/*.env.tpl (via op inject).
+## Re-run after rotating a referenced secret.
+cron-env-seed: require-prod
+	./scripts/seed-cron-env.sh
 
 ## Status — docker ps with name/status/ports
 ps:

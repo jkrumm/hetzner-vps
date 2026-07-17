@@ -322,11 +322,19 @@ fi
 chmod 600 "${ACME_JSON}"
 chown "${DEPLOY_USER}:${DEPLOY_USER}" "${ACME_JSON}"
 
+# Holds cron env files seeded from 1Password by scripts/seed-cron-env.sh.
+# Deliberately outside the repo tree so plaintext secret values can never
+# reach the public git repo.
+mkdir -p /etc/vps
+chown "root:${DEPLOY_USER}" /etc/vps
+chmod 750 /etc/vps
+
 # =============================================================================
-# 12. Install cron jobs (Postgres backup, MariaDB backup, MariaDB cert sync)
+# 12. Install cron jobs (Postgres backup, Postgres liveness, MariaDB backup,
+# MariaDB cert sync)
 # =============================================================================
 log "Installing cron jobs..."
-for cronfile in pg-backup fpp-mariadb-backup fpp-cert-sync; do
+for cronfile in pg-backup pg-health fpp-mariadb-backup fpp-cert-sync; do
   cp "${REPO_DIR}/cron/${cronfile}" "/etc/cron.d/${cronfile}"
   chmod 644 "/etc/cron.d/${cronfile}"
   chown root:root "/etc/cron.d/${cronfile}"
@@ -374,4 +382,5 @@ log " 8. Start all stacks:     make up"
 log "                          (networking → infra → monitoring → fpp in order)"
 log " 9. Provision DBs:        make postgres-setup && make fpp-mariadb-setup"
 log "10. DNS A record:         db.free-planning-poker.com → VPS public IP (DNS-only / grey cloud)"
+log "11. Seed cron env:        make cron-env-seed   (pg-health cron stays broken until this runs)"
 log "============================================================"

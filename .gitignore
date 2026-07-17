@@ -1,9 +1,13 @@
 # TLS certificates — never commit
 traefik/acme.json
 
-# Local env overrides
+# Local env overrides / materialized secrets — never commit.
+# Broad match with an explicit allow for the op:// templates, which are safe.
 .env
-*.env.local
+.env.*
+*.env
+!*.env.tpl
+!.env.tpl
 
 # OS
 .DS_Store
