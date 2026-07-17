@@ -182,6 +182,7 @@ compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
+apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics emails. RollHook-managed.
 apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
 apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel); fpp-server + fpp-analytics later

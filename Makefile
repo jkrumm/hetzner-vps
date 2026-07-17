@@ -15,6 +15,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         argo-up argo-down argo-env argo-bootstrap-image \
         research-gateway-up research-gateway-down research-gateway-env research-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
+        basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
@@ -314,6 +315,17 @@ audio-gateway-bootstrap-image: require-prod
 ## (at minimum index.html) so the healthcheck can pass.
 photo-gallery-up:   require-prod ; $(OP_RUN) docker compose -f apps/photo-gallery/compose.yml up -d
 photo-gallery-down: require-prod ; $(OP_RUN) docker compose -f apps/photo-gallery/compose.yml down
+
+## basalt-ui-marketing stack (static Astro docs site, RollHook-managed) — apps/basalt-ui-marketing/compose.yml
+## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.
+## RollHook deploys on pushes to jkrumm/basalt-ui:master touching apps/marketing/**.
+basalt-ui-marketing-up:   require-prod ; $(OP_RUN) docker compose -f apps/basalt-ui-marketing/compose.yml up -d
+basalt-ui-marketing-down: require-prod ; $(OP_RUN) docker compose -f apps/basalt-ui-marketing/compose.yml down
+## One-shot bootstrap — clone basalt-ui, build apps/marketing, and push :initial to
+## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
+## deploys against. Re-runnable.
+basalt-ui-marketing-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/basalt-ui-marketing/scripts/bootstrap-image.sh
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:

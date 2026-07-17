@@ -1,0 +1,57 @@
+---
+# basalt-ui-marketing — static Astro marketing site served via nginx.
+# Managed by RollHook for zero-downtime deployments via rolling container swap.
+#
+# RollHook constraints (do not change):
+#   - No container_name  — prevents scaling to 2 instances during rollout
+#   - No ports           — Traefik routes via Docker DNS; ports block scaling
+#   - healthcheck required — rollout waits for healthy before removing old container
+#   - IMAGE_TAG env var  — passed by RollHook as the full image URI to deploy
+
+networks:
+  proxy:
+    external: true
+
+services:
+  basalt-ui-marketing:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/basalt-ui-marketing:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      # Main domain — basalt-ui.com
+      - "traefik.http.routers.basalt-ui-marketing.rule=Host(`basalt-ui.com`)"
+      - "traefik.http.routers.basalt-ui-marketing.entrypoints=websecure"
+      - "traefik.http.routers.basalt-ui-marketing.tls.certresolver=letsencrypt"
+      # Request cert covering both apex and www in a single certificate
+      - "traefik.http.routers.basalt-ui-marketing.tls.domains[0].main=basalt-ui.com"
+      - "traefik.http.routers.basalt-ui-marketing.tls.domains[0].sans=www.basalt-ui.com"
+      - "traefik.http.services.basalt-ui-marketing.loadbalancer.server.port=80"
+      - "traefik.http.routers.basalt-ui-marketing.middlewares=rate-limit@file,security-headers@file"
+      # Active health check — Traefik stops routing to draining instance immediately
+      - "traefik.http.services.basalt-ui-marketing.loadbalancer.healthcheck.path=/"
+      - "traefik.http.services.basalt-ui-marketing.loadbalancer.healthcheck.interval=5s"
+      # Managed by RollHook — watchtower must not interfere with rolling deployments
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys
+      - "rollhook.allowed_repos=jkrumm/basalt-ui"
+      # www → canonical redirect (301 permanent)
+      - "traefik.http.routers.basalt-ui-marketing-www.rule=Host(`www.basalt-ui.com`)"
+      - "traefik.http.routers.basalt-ui-marketing-www.entrypoints=websecure"
+      - "traefik.http.routers.basalt-ui-marketing-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.basalt-ui-marketing-www.middlewares=www-to-basalt-ui@docker"
+      - "traefik.http.middlewares.www-to-basalt-ui.redirectregex.regex=^https://www\\.basalt-ui\\.com/(.*)"
+      - "traefik.http.middlewares.www-to-basalt-ui.redirectregex.replacement=https://basalt-ui.com/$${1}"
+      - "traefik.http.middlewares.www-to-basalt-ui.redirectregex.permanent=true"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
