@@ -26,7 +26,7 @@ ping_kuma() {
   local status="$1"
   local msg="$2"
   if [[ -n "${UPTIME_KUMA_PUSH_URL:-}" ]]; then
-    curl -fsSL "${UPTIME_KUMA_PUSH_URL}?status=${status}&msg=${msg}&ping=" > /dev/null 2>&1 || true
+    curl -fsSL --max-time 10 "${UPTIME_KUMA_PUSH_URL}?status=${status}&msg=${msg}&ping=" > /dev/null 2>&1 || true
   fi
 }
 
