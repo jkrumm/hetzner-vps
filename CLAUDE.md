@@ -24,6 +24,7 @@ make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
+make imgproxy-up / make imgproxy-down
 
 # DB schema/user provisioning — idempotent, works for both envs
 make postgres-setup      # run after make infra-up, before make monitoring-up
@@ -245,7 +246,9 @@ SDK ingest).
 
 **Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
 
-**imgproxy** — image CDN at `img.DOMAIN` (public, proxied through Cloudflare so the edge is the cache layer). Renders on-the-fly resizes/format conversions from the **`img/` prefix of the existing backups bucket**; the bucket stays private and is never served directly. URLs are **unsigned** — `https://img.DOMAIN/_/rs:fit:800/plain/img://misc/x.jpg`, where the first segment is a placeholder signature slot (any string works while unsigned) and `img://` is an `IMGPROXY_URL_REPLACEMENTS` alias for `s3://<bucket>/img/`, so public URLs leak neither the bucket name nor the prefix. Access control is the prefix lock plus non-enumerable object keys, not the URL. Stateless: no volumes, no DB.
+**imgproxy** — image CDN at `img.DOMAIN` (public, proxied through Cloudflare so the edge is the cache layer). Renders on-the-fly resizes/format conversions from the **`img/` prefix of the existing backups bucket**; the bucket stays private and is never served directly. URLs are **unsigned** and short — `https://img.DOMAIN/rs:fit:800/misc/x.jpg`. A Traefik catch-all router rewrites that into imgproxy's native form; a higher-priority router passes already-native paths (`/_/…`, `/insecure/…`) through untouched, because the rewrite regex is not idempotent. The `img/` alias (`IMGPROXY_URL_REPLACEMENTS`) resolves to `s3://<bucket>/img/`, so public URLs leak neither the bucket name nor the prefix. Access control is the prefix lock plus non-enumerable object keys, not the URL. Stateless: no volumes, no DB.
+
+Monitored from HomeLab Uptime Kuma (`VPS > Infra`) with **two** monitors: the public edge URL, and `img-origin.DOMAIN` — a DNS-only A record to the Tailscale IP that bypasses Cloudflare so every check does a real B2 fetch + libvips render. imgproxy's `/health` is deliberately not probed: it is liveness only and stays green while every image 404s. Upload/URL tooling is the global `/img` skill (`imgcli`).
 
 > **Load-bearing invariant:** the imgproxy B2 key must be created with `--name-prefix img/`. `backups/vps/postgres/` lives in the same bucket, so that server-side restriction — not `IMGPROXY_S3_ALLOWED_BUCKETS` — is what keeps an unauthenticated public service away from the database dumps. Never point imgproxy at `op://common/backblaze-s3/*` (bucket-wide, has `writeFiles`).
 
