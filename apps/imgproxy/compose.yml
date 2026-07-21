@@ -1,23 +1,23 @@
-# imgproxy — on-the-fly image resizing/format-conversion in front of a private
-# Backblaze B2 bucket. Serves img.${DOMAIN} publicly through the Cloudflare
-# tunnel; Cloudflare's edge cache is the actual CDN layer.
+# imgproxy — on-the-fly image resizing/format-conversion over the `img/` prefix
+# of the existing private object-storage bucket. Serves img.${DOMAIN} publicly
+# through the Cloudflare tunnel; Cloudflare's edge cache is the CDN layer.
 #
 # Phase 1 of the image CDN. The later self-built photo service (shutterflow.app)
 # is a separate project that will consume this same substrate.
 #
 # URL scheme — UNSIGNED (no IMGPROXY_KEY / IMGPROXY_SALT):
-#   https://img.${DOMAIN}/insecure/rs:fit:800/plain/s3://<bucket>/fuji/foo.jpg@webp
+#   https://img.${DOMAIN}/insecure/rs:fit:800/plain/s3://<bucket>/img/fuji/x.jpg@webp
 # Omitting key+salt puts imgproxy in unsigned mode, where the `/insecure` prefix
-# is required. Access control is therefore NOT the URL — it is:
-#   1. the source lock (ALLOWED_SOURCES + S3_ALLOWED_BUCKETS) — only this one
-#      bucket is fetchable, so imgproxy can't be used as an open proxy, and
-#   2. non-enumerable object keys for anything not meant to be discovered.
-# Signing is a deliberate later upgrade: set IMGPROXY_KEY + IMGPROXY_SALT and the
-# `/insecure` prefix stops being accepted.
+# is required. Access control is therefore NOT the URL — it is the prefix lock
+# below plus non-enumerable object keys. Signing is a deliberate later upgrade:
+# set IMGPROXY_KEY + IMGPROXY_SALT and `/insecure` stops being accepted.
 #
-# The B2 credential here is a bucket-scoped READ-ONLY application key — NOT the
-# account master key, and NOT the AWS_* backup credential already in .env.tpl
-# (that one has delete rights on the backups bucket). Keep them distinct.
+# !! THIS BUCKET ALSO HOLDS DATABASE BACKUPS under backups/. The credential here
+# MUST be an application key created with `--name-prefix img/` — B2 enforces that
+# server-side, so it is the control that keeps this public, unauthenticated
+# service away from the dumps. IMGPROXY_S3_ALLOWED_BUCKETS is NOT sufficient on
+# its own here, because backups/ lives in the same bucket. Never point this at
+# the AWS_* backup credential in .env.tpl — that one is bucket-wide.
 
 networks:
   proxy:
@@ -45,17 +45,20 @@ services:
       # B2 requires path-style addressing (endpoint/bucket, not bucket.endpoint).
       IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
       # imgproxy reads the standard AWS names. Fed from the imgproxy-specific
-      # read-only key — deliberately NOT the shared AWS_* backup credential.
+      # read-only, img/-prefixed key — deliberately NOT the AWS_* backup
+      # credential, which is bucket-wide and can read backups/.
       AWS_ACCESS_KEY_ID: ${IMGPROXY_B2_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${IMGPROXY_B2_APP_KEY}
 
-      # --- Source lock (two independent mechanisms, both required) ---
-      # Comma-separated URL *prefixes*, not regex. The trailing slash is
-      # load-bearing: without it `s3://jkrumm-images` would also match
-      # `s3://jkrumm-images-evil/`.
-      IMGPROXY_ALLOWED_SOURCES: "s3://${IMGPROXY_B2_BUCKET}/"
-      # Added in v4.0.0 — enforced inside the S3 client itself, so it still
-      # holds if the ALLOWED_SOURCES prefix match is ever bypassed.
+      # --- Source lock ---
+      # Comma-separated URL *prefixes*, not regex. Both trailing slashes are
+      # load-bearing: `s3://<bucket>/img` without one would also match
+      # `s3://<bucket>/img-backups/`.
+      # This is the second layer only — the B2 key's own `--name-prefix img/`
+      # is the authoritative one, because it is enforced server-side.
+      IMGPROXY_ALLOWED_SOURCES: "s3://${IMGPROXY_B2_BUCKET}/img/"
+      # Added in v4.0.0. Weak on its own here (backups/ is in the same bucket),
+      # but it still blocks reaching any *other* bucket in the account.
       IMGPROXY_S3_ALLOWED_BUCKETS: ${IMGPROXY_B2_BUCKET}
       # SSRF hardening. Moot while sources are S3-only, but free insurance if
       # an http:// source is ever allowed: default is true, so it must be

@@ -307,17 +307,22 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 
 **imgproxy (image CDN)**
 
-Bucket-scoped **read-only** B2 application key — a different bucket and a
-different key from the backup credential below, which has delete rights. Full
-provisioning walkthrough in [docs/image-cdn.md](docs/image-cdn.md).
+Serves the `img/` prefix of the **same bucket that holds the backups**. The key
+must therefore be created with `--name-prefix img/` — that server-side
+restriction is what keeps a public, unauthenticated service away from the
+database dumps. Read-only, no `deleteFiles`. Full walkthrough and the
+verification step in [docs/image-cdn.md](docs/image-cdn.md).
 
 | Variable | Value | How to get |
 |-|-|-|
-| `IMGPROXY_B2_KEY_ID` | `<key-id>` | B2 → Application Keys → new key scoped to the images bucket, capabilities `listBuckets,listFiles,readFiles` |
+| `IMGPROXY_B2_KEY_ID` | `<key-id>` | `b2 key create --bucket <bucket> --name-prefix img/ imgproxy-read listBuckets,listFiles,readFiles` |
 | `IMGPROXY_B2_APP_KEY` | `<secret>` | Shown once at key creation — capture immediately |
-| `IMGPROXY_B2_BUCKET` | `<bucket>` | Private images bucket name |
-| `IMGPROXY_B2_ENDPOINT` | `https://...` | B2 S3-compatible endpoint for the bucket's region |
-| `IMGPROXY_B2_REGION` | `<region>` | B2 region, e.g. matching the endpoint host |
+| `IMGPROXY_B2_BUCKET` | `<bucket>` | Reused from `op://common/backblaze-s3/BUCKET` |
+| `IMGPROXY_B2_ENDPOINT` | `https://...` | Reused from `op://common/backblaze-s3/ENDPOINT` |
+| `IMGPROXY_B2_REGION` | `<region>` | Reused from `op://common/backblaze-s3/REGION` |
+
+The account master key is **not** in 1Password — both stored B2 credentials are
+bucket-restricted and lack `writeKeys`, so key creation needs the B2 web console.
 
 **Backups (S3-compatible object storage)**
 
