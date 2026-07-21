@@ -120,8 +120,16 @@ services:
       IMGPROXY_MAX_SRC_FILE_SIZE: "52428800" # 50 MB
     healthcheck:
       # `imgproxy health` GETs /health and exits non-zero on anything but 200.
-      # Since v3.19 that endpoint also round-trips a tiny image through libvips,
-      # so a pass means the processing path works, not just that the port is up.
+      #
+      # LIVENESS ONLY — it does NOT exercise libvips or the S3 source. Docs:
+      # "returns an HTTP Status of 200 OK if the server has been successfully
+      # started". Confirmed here: health checks produce zero OTLP spans, so they
+      # never enter the traced processing path.
+      #
+      # Consequence: an imgproxy that is healthy but cannot reach B2, or whose
+      # credential has expired, still reports healthy and Traefik keeps routing
+      # to it. Renders 404 while the container looks fine. Detection has to come
+      # from the OTLP error rate, not this probe.
       test: ["CMD", "imgproxy", "health"]
       interval: 30s
       timeout: 10s
