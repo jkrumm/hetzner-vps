@@ -172,6 +172,22 @@ services:
       # is the object key. `$$` escapes compose interpolation — Traefik sees `$`.
       - "traefik.http.middlewares.imgproxy-short.replacepathregex.regex=^/((?:[a-zA-Z0-9_]+:[^/]+/)*)(.+)$$"
       - "traefik.http.middlewares.imgproxy-short.replacepathregex.replacement=/_/$${1}plain/img/$${2}"
+
+      # --- Origin hostname for monitoring (Tailscale-only, NOT behind Cloudflare) ---
+      # Uptime Kuma cannot meaningfully probe img.${DOMAIN}: renditions carry a
+      # 1-year TTL, so after the first check Cloudflare answers from the edge
+      # forever and the monitor stays green even if imgproxy or B2 is dead.
+      # This hostname is a DNS-only (grey-cloud) A record → VPS Tailscale IP, so
+      # probes land on Traefik directly and every check performs a real B2 fetch
+      # plus a real libvips render. Same wildcard cert, same rewrite middleware.
+      # CGNAT makes the address unreachable from the public internet, so the DNS
+      # record itself is the access control (see CLAUDE.md → Networks).
+      - "traefik.http.routers.imgproxy-origin.rule=Host(`img-origin.${DOMAIN}`)"
+      - "traefik.http.routers.imgproxy-origin.priority=50"
+      - "traefik.http.routers.imgproxy-origin.entrypoints=websecure"
+      - "traefik.http.routers.imgproxy-origin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imgproxy-origin.service=imgproxy"
+      - "traefik.http.routers.imgproxy-origin.middlewares=rate-limit@file,security-headers@file,imgproxy-short@docker"
     networks:
       - proxy
       - monitoring-net
