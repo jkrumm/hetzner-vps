@@ -51,14 +51,20 @@ services:
       AWS_SECRET_ACCESS_KEY: ${IMGPROXY_B2_APP_KEY}
 
       # --- URL shortening ---
-      # Maps the virtual `img://` scheme onto the real bucket path, so public
-      # URLs carry neither the bucket name nor the img/ prefix:
-      #   /_/rs:fit:800/plain/img://misc/x.jpg
-      # instead of
-      #   /insecure/rs:fit:800/plain/s3://<bucket>/img/misc/x.jpg
-      # Applied BEFORE the ALLOWED_SOURCES check, so that check still sees (and
-      # must whitelist) the post-replacement s3:// form below.
-      IMGPROXY_URL_REPLACEMENTS: "img://=s3://${IMGPROXY_B2_BUCKET}/img/"
+      # Maps a virtual prefix onto the real bucket path, so public URLs carry
+      # neither the bucket name nor the img/ prefix. Applied BEFORE the
+      # ALLOWED_SOURCES check, so that check still sees (and must whitelist) the
+      # post-replacement s3:// form below.
+      #
+      # Two aliases, both resolving to the same place:
+      #   img/   — the canonical one. NO double slash, which is required: the
+      #            Traefik short-URL rewrite emits this form, and Traefik 3.x
+      #            rejects any rewrite whose output changes under path
+      #            sanitization (`img://` collapses to `img:/` and is refused).
+      #   img:// — kept only so previously-published URLs keep resolving.
+      # The patterns are disjoint: `img://…` never matches the `img/` prefix
+      # because its 4th character is `:`.
+      IMGPROXY_URL_REPLACEMENTS: "img://=s3://${IMGPROXY_B2_BUCKET}/img/;img/=s3://${IMGPROXY_B2_BUCKET}/img/"
 
       # --- Source lock ---
       # Comma-separated URL *prefixes*, not regex. Both trailing slashes are
@@ -136,7 +142,7 @@ services:
       # options always contain a colon; bucket path segments never do), group 2
       # is the object key. `$$` escapes compose interpolation — Traefik sees `$`.
       - "traefik.http.middlewares.imgproxy-short.replacepathregex.regex=^/((?:[a-zA-Z0-9_]+:[^/]+/)*)(.+)$$"
-      - "traefik.http.middlewares.imgproxy-short.replacepathregex.replacement=/_/$${1}plain/img://$${2}"
+      - "traefik.http.middlewares.imgproxy-short.replacepathregex.replacement=/_/$${1}plain/img/$${2}"
     networks:
       - proxy
     logging:
