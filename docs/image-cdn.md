@@ -200,6 +200,38 @@ b2 account clear
 
 ---
 
+## Observability
+
+imgproxy exports traces, metrics, and logs to ClickStack over `monitoring-net`
+(wiring and the enable-flag gotcha: `docs/observability.md`). Traefik's edge span
+alone can't tell you *why* a render was slow; imgproxy's spans nest underneath it
+and split the request:
+
+```sql
+SELECT SpanName, count() c, round(avg(Duration)/1e6,2) avg_ms
+FROM default.otel_traces
+WHERE ServiceName='imgproxy' AND Timestamp > now() - INTERVAL 1 HOUR
+GROUP BY SpanName ORDER BY c DESC
+```
+
+Measured at go-live, per origin request (cache-busted, so every one hit B2):
+
+| span | avg | max |
+|-|-|-|
+| `/request` | 132.62 ms | 478.50 ms |
+| `downloading_source_image` | 95.96 ms | 442.69 ms |
+| `processing_image` | 42.08 ms | 51.18 ms |
+| `queue` | 0.01 ms | 0.01 ms |
+
+**Origin latency is dominated by the B2 fetch, not by libvips** — ~72% of the
+request. Processing is stable (42–51 ms) while download swings by 10×. So the
+lever for first-render latency is the source round-trip, not `IMGPROXY_WORKERS`
+or CPU; and `queue` at 0.01 ms says there is no worker contention to tune away.
+Edge caching hides all of this from repeat requests, which is why the Cloudflare
+`HIT` rate matters more than any imgproxy setting here.
+
+---
+
 ## Deploy
 
 ```bash

@@ -35,7 +35,7 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
 | Tier | Port | Auth | Trust boundary | Used by |
 |-|-|-|-|-|
 | Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), future cross-host exports |
-| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, argo-api, future internal services |
+| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, argo-api, imgproxy, future internal services |
 
 The `:4319` port has no host binding and no Traefik label — it's reachable only
 from other containers on `monitoring-net`. The trust boundary is the docker
@@ -163,6 +163,32 @@ environment:
 
 No `OTEL_EXPORTER_OTLP_HEADERS`. The SDK in the app (typically
 `@opentelemetry/sdk-node`) appends `/v1/traces` and `/v1/logs` to the endpoint.
+
+### Third-party containers (imgproxy as canonical example)
+
+An off-the-shelf image may honour the standard `OTEL_*` vars for *where* to send
+telemetry while keeping its own flag for *whether* to send any. imgproxy is
+exactly this — v4 dropped `IMGPROXY_OPEN_TELEMETRY_{ENDPOINT,PROTOCOL}` in
+favour of `OTEL_*`, but kept the enable flags:
+
+```yaml
+# apps/imgproxy/compose.yml
+environment:
+  IMGPROXY_OPEN_TELEMETRY_ENABLE: "true"          # without this, the rest is inert
+  IMGPROXY_OPEN_TELEMETRY_ENABLE_METRICS: "true"
+  IMGPROXY_OPEN_TELEMETRY_ENABLE_LOGS: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_SERVICE_NAME: imgproxy
+```
+
+Setting only the `OTEL_*` vars produces no error and no data — the service
+starts happily and exports nothing. **Always confirm at the container's own
+startup line rather than assuming**, then confirm rows actually land:
+
+```
+msg="OpenTelemetry monitoring" enabled=true logs=true metrics=true
+```
 
 ### Browser-side SPAs (argo-dashboard as canonical example)
 
