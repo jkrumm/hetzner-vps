@@ -50,6 +50,16 @@ services:
       AWS_ACCESS_KEY_ID: ${IMGPROXY_B2_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${IMGPROXY_B2_APP_KEY}
 
+      # --- URL shortening ---
+      # Maps the virtual `img://` scheme onto the real bucket path, so public
+      # URLs carry neither the bucket name nor the img/ prefix:
+      #   /_/rs:fit:800/plain/img://misc/x.jpg
+      # instead of
+      #   /insecure/rs:fit:800/plain/s3://<bucket>/img/misc/x.jpg
+      # Applied BEFORE the ALLOWED_SOURCES check, so that check still sees (and
+      # must whitelist) the post-replacement s3:// form below.
+      IMGPROXY_URL_REPLACEMENTS: "img://=s3://${IMGPROXY_B2_BUCKET}/img/"
+
       # --- Source lock ---
       # Comma-separated URL *prefixes*, not regex. Both trailing slashes are
       # load-bearing: `s3://<bucket>/img` without one would also match
