@@ -46,6 +46,15 @@ EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
 # dedicated Traefik key in HyperDX → Team Settings and move this reference).
 HYPERDX_API_KEY=op://vps/argo/HYPERDX_API_KEY_PROD
 
+# --- imgproxy (apps/imgproxy/compose.yml — image CDN over a private B2 bucket) ---
+# Bucket-scoped READ-ONLY application key. Deliberately separate from the AWS_*
+# backup credential below, which is a different bucket and has delete rights.
+IMGPROXY_B2_KEY_ID=op://vps/imgproxy/B2_KEY_ID
+IMGPROXY_B2_APP_KEY=op://vps/imgproxy/B2_APP_KEY
+IMGPROXY_B2_BUCKET=op://vps/imgproxy/B2_BUCKET
+IMGPROXY_B2_ENDPOINT=op://vps/imgproxy/B2_ENDPOINT
+IMGPROXY_B2_REGION=op://vps/imgproxy/B2_REGION
+
 # --- Notifications ---
 # WATCHTOWER_URL is the shoutrrr-format (slack://...) for Watchtower's notifier.
 # WEBHOOK_UPDATES is the plain https webhook for the same #updates channel — used

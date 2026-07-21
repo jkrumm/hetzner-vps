@@ -127,6 +127,7 @@ Docker API access — no direct docker.sock mounts:
 | socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | auto |
 | watchtower | containrrr/watchtower | Auto-updates containers, Pushover on failure | auto |
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
+| imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
 
 ---
 
@@ -303,6 +304,20 @@ Single-tenant database for Free Planning Poker. Lives in `apps/fpp/` because it'
 | `FPP_BEA_BASE_URL` | `https://...` | Bun email API base URL (used by fpp-analytics for survey emails) |
 | `FPP_BEA_SECRET_KEY` | `<secret>` | Auth key for the bun email API |
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | `https://...` | Heartbeat URL for the 10-min sync sidecar (separate Kuma monitor) |
+
+**imgproxy (image CDN)**
+
+Bucket-scoped **read-only** B2 application key — a different bucket and a
+different key from the backup credential below, which has delete rights. Full
+provisioning walkthrough in [docs/image-cdn.md](docs/image-cdn.md).
+
+| Variable | Value | How to get |
+|-|-|-|
+| `IMGPROXY_B2_KEY_ID` | `<key-id>` | B2 → Application Keys → new key scoped to the images bucket, capabilities `listBuckets,listFiles,readFiles` |
+| `IMGPROXY_B2_APP_KEY` | `<secret>` | Shown once at key creation — capture immediately |
+| `IMGPROXY_B2_BUCKET` | `<bucket>` | Private images bucket name |
+| `IMGPROXY_B2_ENDPOINT` | `https://...` | B2 S3-compatible endpoint for the bucket's region |
+| `IMGPROXY_B2_REGION` | `<region>` | B2 region, e.g. matching the endpoint host |
 
 **Backups (S3-compatible object storage)**
 

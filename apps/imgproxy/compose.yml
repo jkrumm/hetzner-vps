@@ -1,0 +1,103 @@
+# imgproxy — on-the-fly image resizing/format-conversion in front of a private
+# Backblaze B2 bucket. Serves img.${DOMAIN} publicly through the Cloudflare
+# tunnel; Cloudflare's edge cache is the actual CDN layer.
+#
+# Phase 1 of the image CDN. The later self-built photo service (shutterflow.app)
+# is a separate project that will consume this same substrate.
+#
+# URL scheme — UNSIGNED (no IMGPROXY_KEY / IMGPROXY_SALT):
+#   https://img.${DOMAIN}/insecure/rs:fit:800/plain/s3://<bucket>/fuji/foo.jpg@webp
+# Omitting key+salt puts imgproxy in unsigned mode, where the `/insecure` prefix
+# is required. Access control is therefore NOT the URL — it is:
+#   1. the source lock (ALLOWED_SOURCES + S3_ALLOWED_BUCKETS) — only this one
+#      bucket is fetchable, so imgproxy can't be used as an open proxy, and
+#   2. non-enumerable object keys for anything not meant to be discovered.
+# Signing is a deliberate later upgrade: set IMGPROXY_KEY + IMGPROXY_SALT and the
+# `/insecure` prefix stops being accepted.
+#
+# The B2 credential here is a bucket-scoped READ-ONLY application key — NOT the
+# account master key, and NOT the AWS_* backup credential already in .env.tpl
+# (that one has delete rights on the backups bucket). Keep them distinct.
+
+networks:
+  proxy:
+    external: true
+
+services:
+  imgproxy:
+    # Major-pinned: watchtower tracks v4.x patch releases, never a v4→v5 jump.
+    image: ghcr.io/imgproxy/imgproxy:v4
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # libvips holds decoded frames in memory; 100 MP of source needs headroom.
+    mem_limit: 1g
+    environment:
+      IMGPROXY_BIND: ":8080"
+      # Workers default to CPU count (12 here) — each can hold a decoded image,
+      # so cap it well below mem_limit rather than letting it scale with cores.
+      IMGPROXY_WORKERS: "4"
+
+      # --- S3 source (Backblaze B2, S3-compatible API) ---
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_REGION: ${IMGPROXY_B2_REGION}
+      IMGPROXY_S3_ENDPOINT: ${IMGPROXY_B2_ENDPOINT}
+      # B2 requires path-style addressing (endpoint/bucket, not bucket.endpoint).
+      IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
+      # imgproxy reads the standard AWS names. Fed from the imgproxy-specific
+      # read-only key — deliberately NOT the shared AWS_* backup credential.
+      AWS_ACCESS_KEY_ID: ${IMGPROXY_B2_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${IMGPROXY_B2_APP_KEY}
+
+      # --- Source lock (two independent mechanisms, both required) ---
+      # Comma-separated URL *prefixes*, not regex. The trailing slash is
+      # load-bearing: without it `s3://jkrumm-images` would also match
+      # `s3://jkrumm-images-evil/`.
+      IMGPROXY_ALLOWED_SOURCES: "s3://${IMGPROXY_B2_BUCKET}/"
+      # Added in v4.0.0 — enforced inside the S3 client itself, so it still
+      # holds if the ALLOWED_SOURCES prefix match is ever bypassed.
+      IMGPROXY_S3_ALLOWED_BUCKETS: ${IMGPROXY_B2_BUCKET}
+      # SSRF hardening. Moot while sources are S3-only, but free insurance if
+      # an http:// source is ever allowed: default is true, so it must be
+      # turned off explicitly.
+      IMGPROXY_ALLOW_PRIVATE_SOURCE_ADDRESSES: "false"
+
+      # --- Caching (Cloudflare edge is the real CDN; this sets what it obeys) ---
+      IMGPROXY_TTL: "31536000" # 1 year — renditions are immutable per URL
+      IMGPROXY_CACHE_CONTROL_PASSTHROUGH: "false" # ignore B2's headers, use TTL
+
+      # --- Format negotiation via Accept header ---
+      # Serves AVIF/WebP when the client advertises support, unless the URL
+      # asked for a specific extension. Priority: JXL > AVIF > WebP.
+      # NOTE: this makes responses vary by Accept — see docs/image-cdn.md for
+      # the Cloudflare `Vary` caveat before adding more auto-formats.
+      IMGPROXY_AUTO_WEBP: "true"
+      IMGPROXY_AUTO_AVIF: "true"
+
+      # --- Source limits ---
+      # 100 MP: a 40 MP Fuji frame fits with room for stitched panoramas.
+      IMGPROXY_MAX_SRC_RESOLUTION: "100"
+      IMGPROXY_MAX_SRC_FILE_SIZE: "52428800" # 50 MB
+    healthcheck:
+      # `imgproxy health` GETs /health and exits non-zero on anything but 200.
+      # Since v3.19 that endpoint also round-trips a tiny image through libvips,
+      # so a pass means the processing path works, not just that the port is up.
+      test: ["CMD", "imgproxy", "health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.imgproxy.rule=Host(`img.${DOMAIN}`)"
+      - "traefik.http.routers.imgproxy.entrypoints=websecure"
+      - "traefik.http.routers.imgproxy.tls.certresolver=letsencrypt"
+      - "traefik.http.services.imgproxy.loadbalancer.server.port=8080"
+      - "traefik.http.routers.imgproxy.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.imgproxy.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.imgproxy.loadbalancer.healthcheck.interval=30s"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

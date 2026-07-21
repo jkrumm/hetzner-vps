@@ -95,6 +95,7 @@ Key variables:
 | `FPP_ANALYTICS_SECRET_TOKEN`, `FPP_ANALYTICS_SENTRY_DSN`, `FPP_BEA_BASE_URL`, `FPP_BEA_SECRET_KEY` | fpp-analytics (FastAPI) + updater sidecar |
 | `BEA_SECRET_KEY`, `BEA_RESEND_API_KEY`, `BEA_RECEIVER_EMAIL` | bun-email-api (`apps/bun-email-api/compose.yml`). `SECRET_KEY` is the same bearer token as `FPP_BEA_SECRET_KEY` (consumer side) |
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | fpp-analytics-updater 10-min sync heartbeat (separate Kuma monitor) |
+| `IMGPROXY_B2_KEY_ID`, `IMGPROXY_B2_APP_KEY`, `IMGPROXY_B2_BUCKET`, `IMGPROXY_B2_ENDPOINT`, `IMGPROXY_B2_REGION` | imgproxy (`apps/imgproxy/compose.yml`) — bucket-scoped **read-only** B2 key, distinct from the `AWS_*` backup credential. See `docs/image-cdn.md` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `UPTIME_KUMA_PUSH_URL` | `scripts/backup-pg.sh` |
 | `UPTIME_KUMA_POSTGRES_PUSH_URL` | `scripts/health-pg.sh` — per-minute Postgres liveness heartbeat (separate monitor from pg-backup) |
 | `SLACK_WATCHTOWER_URL` | Watchtower → Slack #updates via shoutrrr (`common/slack/WATCHTOWER_URL`) |
@@ -184,6 +185,7 @@ compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStac
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics emails. RollHook-managed.
+apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
 apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
 apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel); fpp-server + fpp-analytics later
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
@@ -241,6 +243,8 @@ runbook (one-line env addition for backend, four Traefik labels for frontend bro
 SDK ingest).
 
 **Umami** — analytics at `umami.DOMAIN`. Lives in `umami` schema of main Postgres database. Dedicated `umami` user — schema-only access. Superuser can JOIN across schemas (e.g., Metabase/Grafana). Watchtower auto-updates. Default credentials: admin/umami — change on first login. Client-side tracking: embed script from dashboard. Server-side: POST /api/send with Bearer token.
+
+**imgproxy** — image CDN at `img.DOMAIN` (public, proxied through Cloudflare so the edge is the cache layer). Renders on-the-fly resizes/format conversions from a **private** Backblaze B2 bucket; the bucket is never served directly. URLs are **unsigned** (`/insecure/` prefix) — access control is the source lock (`IMGPROXY_ALLOWED_SOURCES` + `IMGPROXY_S3_ALLOWED_BUCKETS`, both pinned to the one bucket) plus non-enumerable object keys, not the URL. Stateless: no volumes, no DB. Uses its own bucket-scoped read-only B2 key, **not** the `AWS_*` backup credential. Full design, prefix conventions, the Cloudflare `Vary`/`Accept` caveat, and the B2 provisioning walkthrough: `docs/image-cdn.md`.
 
 **photo-gallery** — static Astro photo gallery at `photos.DOMAIN`. nginx:alpine serves a host-mounted directory (`/home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro`). No image registry, no RollHook — content is built on the developer laptop and rsynced via SSH/Tailscale by the `photo-flow` CLI (`photoflow sync-gallery`). Watchtower auto-updates the nginx base image. The host directory must exist (and contain at least `index.html`) before `make photo-gallery-up`, otherwise the healthcheck fails.
 

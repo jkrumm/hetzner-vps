@@ -15,6 +15,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         argo-up argo-down argo-env argo-bootstrap-image \
         research-gateway-up research-gateway-down research-gateway-env research-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
+        imgproxy-up imgproxy-down \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
@@ -71,6 +72,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) fpp-up
 	$(MAKE) bun-email-api-up
 	$(MAKE) photo-gallery-up
+	$(MAKE) imgproxy-up
 	$(MAKE) audio-gateway-up
 else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
@@ -85,6 +87,7 @@ endif
 down:
 ifeq ($(ENV),prod)
 	$(MAKE) audio-gateway-down
+	$(MAKE) imgproxy-down
 	$(MAKE) photo-gallery-down
 	$(MAKE) bun-email-api-down
 	$(MAKE) fpp-down
@@ -315,6 +318,12 @@ audio-gateway-bootstrap-image: require-prod
 ## (at minimum index.html) so the healthcheck can pass.
 photo-gallery-up:   require-prod ; $(OP_RUN) docker compose -f apps/photo-gallery/compose.yml up -d
 photo-gallery-down: require-prod ; $(OP_RUN) docker compose -f apps/photo-gallery/compose.yml down
+
+## imgproxy stack — image CDN at img.DOMAIN, sourcing a private B2 bucket.
+## Stateless: no volumes, no DB. Cloudflare's edge cache is the CDN layer.
+## Requires op://vps/imgproxy/* (read-only, bucket-scoped B2 key) to exist first.
+imgproxy-up:   require-prod ; $(OP_RUN) docker compose -f apps/imgproxy/compose.yml up -d
+imgproxy-down: require-prod ; $(OP_RUN) docker compose -f apps/imgproxy/compose.yml down
 
 ## basalt-ui-marketing stack (static Astro docs site, RollHook-managed) — apps/basalt-ui-marketing/compose.yml
 ## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.
