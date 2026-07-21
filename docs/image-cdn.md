@@ -37,18 +37,32 @@ bucket-wide with `writeFiles`, and exists for the backup scripts.
 
 ## Access model
 
-URLs are **unsigned**. imgproxy runs without `IMGPROXY_KEY`/`IMGPROXY_SALT`,
-which puts it in unsigned mode and makes the `/insecure` prefix mandatory:
+URLs are **unsigned**. imgproxy runs without `IMGPROXY_KEY`/`IMGPROXY_SALT`.
 
 ```
-https://img.<domain>/insecure/rs:fit:800/plain/s3://<bucket>/img/fuji/foo.jpg@webp
+https://img.<domain>/_/rs:fit:800/plain/img://fuji/foo.jpg
+                    │ │           │     │
+                    │ │           │     └─ img:// alias → s3://<bucket>/img/
+                    │ │           └─ plain (unencoded) source URL follows
+                    │ └─ processing options (omit entirely for the original)
+                    └─ signature slot
 ```
+
+**The signature slot accepts any string in unsigned mode** — `_`, `unsafe`,
+`insecure` all work; it is not a keyword. Once `IMGPROXY_KEY`/`IMGPROXY_SALT`
+are set it must hold a valid HMAC, and every placeholder stops working.
+
+**`img://` is an alias**, not a real scheme — `IMGPROXY_URL_REPLACEMENTS` expands
+it to `s3://<bucket>/img/` before anything else runs. Public URLs therefore leak
+neither the bucket name nor the `img/` prefix. The long form
+(`plain/s3://<bucket>/img/…`) still works and is equivalent.
 
 Anyone who knows an object key can render it. That is intended for phase 1.
 
 | Control | What it prevents |
 |-|-|
 | B2 key `--name-prefix img/` | reading `backups/` or anything else in the bucket (server-side, authoritative) |
+| S3 keys are literal — no `..` resolution | `img://../backups/…` traversal out of the alias (verified, see results) |
 | B2 key read-only caps | imgproxy writing or deleting anything, ever |
 | `IMGPROXY_ALLOWED_SOURCES=s3://<bucket>/img/` | imgproxy being used as an open proxy for arbitrary URLs |
 | `IMGPROXY_S3_ALLOWED_BUCKETS` | reaching a *different* bucket in the account |
@@ -59,8 +73,8 @@ The bucket stays **private** — B2 never serves it directly, only imgproxy read
 from it.
 
 **Upgrading to signed URLs later:** set `IMGPROXY_KEY` and `IMGPROXY_SALT`. The
-`/insecure` prefix immediately stops being accepted, so every consumer must be
-migrated to generating HMAC signatures in the same change.
+placeholder signature slot immediately stops being accepted, so every consumer
+must be migrated to generating HMAC signatures in the same change.
 
 ---
 
@@ -109,8 +123,8 @@ AVIF. It matters for:
 **Mitigation where it matters — use `f:jpg`, NOT `@jpg`:**
 
 ```
-.../rs:fit:800/f:jpg/plain/s3://<bucket>/img/blog/x.jpg      ✅ pinned AND cached
-.../rs:fit:800/plain/s3://<bucket>/img/blog/x.jpg@jpg        ❌ pinned, NOT cached
+.../rs:fit:800/f:jpg/plain/img://blog/x.jpg      ✅ pinned AND cached
+.../rs:fit:800/plain/img://blog/x.jpg@jpg        ❌ pinned, NOT cached
 ```
 
 Both pin the output format. But Cloudflare's default static caching keys off the
@@ -129,31 +143,46 @@ Do not add a Cloudflare cache rule unless verification actually shows repeat
 
 ## Provisioning the B2 keys
 
-**Requires the B2 account master key, which is NOT in 1Password.** Both stored
-credentials (`op://Private/Backblaze B2` and `op://common/backblaze-s3`) are
-already bucket-restricted and lack the `writeKeys` capability, so neither can
-create application keys. Use the B2 web console (login in
-`op://Private/Backblaze B2`), or authorize the CLI with a real master key.
+Creating application keys requires the `writeKeys` capability, which only the
+**account master key** at `op://Private/b2-master` holds. Bucket-restricted keys
+cannot create keys — B2 returns `unauthorized`.
 
-Create two keys, both restricted to the bucket **and** the `img/` prefix:
+B2 account key inventory:
 
-| Key | Capabilities | Stored at |
-|-|-|-|
-| `imgproxy-read` | `listBuckets,listFiles,readFiles` | `op://vps/imgproxy/{B2_KEY_ID,B2_APP_KEY}` |
-| `images-write` | `listBuckets,listFiles,readFiles,writeFiles` | `op://common/b2-images-write/{B2_KEY_ID,B2_APP_KEY}` |
+| Key | Scope | Stored at | Used by |
+|-|-|-|-|
+| account master | all buckets, incl. `writeKeys` | `op://Private/b2-master` | key management only — never wire into automation |
+| `b2-admin-jkrumm` | bucket `jkrumm`, incl. `deleteFiles` | `op://Private/Backblaze B2` (`MASTER_*` fields) | homelab `make restic-prune` / `restic-init` |
+| `b2-shared-append-only` | bucket `jkrumm`, no delete | `op://common/backblaze-s3` | backup scripts (vps pg/mariadb, homelab restic) |
+| `imgproxy-read` | bucket `jkrumm`, **prefix `img/`**, read-only | `op://vps/imgproxy` | imgproxy |
+| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | uploads (photoflow, Obsidian, agents) |
 
-Neither gets `deleteFiles` — uploads must not be able to destroy originals, and
-the CDN must not be able to write at all.
+> The `MASTER_*` field names in `op://Private/Backblaze B2` are historical and
+> **do not hold the master key** — they hold `b2-admin-jkrumm`. The names are
+> load-bearing: `homelab/Makefile` reads them literally. Do not rename them
+> without updating that Makefile.
 
-With a master key authorized, the CLI form is:
+To create the imgproxy keys from scratch:
 
 ```bash
+b2 account authorize "$(op read 'op://Private/b2-master/B2_KEY_ID' --account tkrumm)" \
+                     "$(op read 'op://Private/b2-master/B2_APP_KEY' --account tkrumm)"
+
 b2 key create --bucket <bucket> --name-prefix img/ \
   imgproxy-read listBuckets,listFiles,readFiles
 
 b2 key create --bucket <bucket> --name-prefix img/ \
   images-write listBuckets,listFiles,readFiles,writeFiles
+
+b2 account clear
 ```
+
+Neither gets `deleteFiles` — uploads must not be able to destroy originals, and
+the CDN must not be able to write at all.
+
+> **Capture the output in the same command that stores it.** B2 prints the
+> `applicationKey` exactly once; a create whose secret you don't persist leaves
+> an orphaned key you can only delete and redo.
 
 B2 prints the application key exactly once, at creation. Capture both into
 1Password immediately. Bucket coordinates (`BUCKET`, `ENDPOINT`, `REGION`) are
@@ -201,7 +230,7 @@ aws s3 cp test.jpg s3://<bucket>/img/misc/cdn-smoke-test.jpg \
 
 # 2. resized rendition, auto-format
 curl -sI -H 'Accept: image/avif,image/webp,image/*' \
-  'https://img.<domain>/insecure/rs:fit:800/plain/s3://<bucket>/img/misc/cdn-smoke-test.jpg'
+  'https://img.<domain>/_/rs:fit:800/plain/img://misc/cdn-smoke-test.jpg'
 #    → 200, content-type: image/avif (or image/webp)
 
 # 3. repeat → edge cache hit
@@ -209,12 +238,17 @@ curl -sI -H 'Accept: image/avif,image/webp,image/*' \
 
 # 4. source lock — off-bucket source must be rejected
 curl -so /dev/null -w '%{http_code}\n' \
-  'https://img.<domain>/insecure/rs:fit:800/plain/https://example.com/x.jpg'
+  'https://img.<domain>/_/rs:fit:800/plain/https://example.com/x.jpg'
 #    → 404 (imgproxy reports a forbidden source as 404, not 403)
 
 # 5. THE IMPORTANT ONE — backups must be unreachable through the CDN
 curl -so /dev/null -w '%{http_code}\n' \
-  'https://img.<domain>/insecure/rs:fit:800/plain/s3://<bucket>/backups/vps/postgres/<file>'
+  'https://img.<domain>/_/rs:fit:800/plain/s3://<bucket>/backups/vps/postgres/<file>'
+#    → 404
+
+# 6. traversal out of the img:// alias must not reach backups either
+curl -so /dev/null -w '%{http_code}\n' \
+  'https://img.<domain>/_/plain/img://../backups/vps/postgres/<file>'
 #    → 404
 ```
 
@@ -230,8 +264,10 @@ change to the key, `ALLOWED_SOURCES`, or the bucket layout.
 | Repeat request | `cf-cache-status: HIT` |
 | Off-bucket source (`https://…`, other bucket) | 404 |
 | `backups/…` real dump filename via CDN | 404 |
+| `img://../backups/…` traversal (4 encodings) | 404 |
 | B2 key listing `backups/` directly | `unauthorized` (server-side, `restricted to files that start with 'img/'`) |
 | `f:jpg` | `image/jpeg`, MISS → HIT |
+| Short form `/_/plain/img://…` | 200 (alias + placeholder slot both work) |
 | `@jpg` | `image/jpeg`, `DYNAMIC` (uncached — see above) |
 
 Confirm dimensions with `curl ... | file -` — `rs:fit:800` bounds the *longest*
