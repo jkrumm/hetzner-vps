@@ -102,13 +102,41 @@ services:
       retries: 3
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.imgproxy.rule=Host(`img.${DOMAIN}`)"
-      - "traefik.http.routers.imgproxy.entrypoints=websecure"
-      - "traefik.http.routers.imgproxy.tls.certresolver=letsencrypt"
       - "traefik.http.services.imgproxy.loadbalancer.server.port=8080"
-      - "traefik.http.routers.imgproxy.middlewares=rate-limit@file,security-headers@file"
       - "traefik.http.services.imgproxy.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.imgproxy.loadbalancer.healthcheck.interval=30s"
+
+      # --- Two routers, so both URL styles work ---
+      #
+      # 1. imgproxy-raw (priority 100) — paths that already carry a signature
+      #    slot pass through untouched:  /_/rs:fit:800/plain/img://misc/x.jpg
+      #
+      # 2. imgproxy (priority 1, catch-all) — everything else is rewritten into
+      #    the raw form, giving the short public URL:  /rs:fit:800/misc/x.jpg
+      #
+      # The split exists because the rewrite regex is not idempotent: applied to
+      # an already-raw path it would nest a second `plain/img://` and break it.
+      # Matching the signature slot first is what keeps the rewrite off them.
+
+      - "traefik.http.routers.imgproxy-raw.rule=Host(`img.${DOMAIN}`) && (PathPrefix(`/_/`) || PathPrefix(`/insecure/`))"
+      - "traefik.http.routers.imgproxy-raw.priority=100"
+      - "traefik.http.routers.imgproxy-raw.entrypoints=websecure"
+      - "traefik.http.routers.imgproxy-raw.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imgproxy-raw.service=imgproxy"
+      - "traefik.http.routers.imgproxy-raw.middlewares=rate-limit@file,security-headers@file"
+
+      - "traefik.http.routers.imgproxy.rule=Host(`img.${DOMAIN}`)"
+      - "traefik.http.routers.imgproxy.priority=1"
+      - "traefik.http.routers.imgproxy.entrypoints=websecure"
+      - "traefik.http.routers.imgproxy.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imgproxy.service=imgproxy"
+      - "traefik.http.routers.imgproxy.middlewares=rate-limit@file,security-headers@file,imgproxy-short@docker"
+
+      # Group 1 captures any leading `opt:val/` segments (imgproxy processing
+      # options always contain a colon; bucket path segments never do), group 2
+      # is the object key. `$$` escapes compose interpolation — Traefik sees `$`.
+      - "traefik.http.middlewares.imgproxy-short.replacepathregex.regex=^/((?:[a-zA-Z0-9_]+:[^/]+/)*)(.+)$$"
+      - "traefik.http.middlewares.imgproxy-short.replacepathregex.replacement=/_/$${1}plain/img://$${2}"
     networks:
       - proxy
     logging:
