@@ -95,6 +95,10 @@ given URL determines the cached format for every subsequent client. If an
 AVIF-capable browser warms the cache, an AVIF response is what an
 AVIF-incapable client gets too.
 
+**Confirmed live**, not theoretical: a request sending `Accept: image/webp,image/*`
+(no AVIF) was served `image/avif` from the edge, because an AVIF-capable client
+had warmed that URL first.
+
 In practice this is low-risk in 2026 — every current browser engine supports
 AVIF. It matters for:
 
@@ -102,10 +106,21 @@ AVIF. It matters for:
 - scrapers, RSS readers, and social/OpenGraph link unfurlers, which often send
   a generic or absent `Accept`
 
-**Mitigation where it matters:** pin the extension in the URL instead of relying
-on negotiation. `.../plain/s3://<bucket>/img/blog/x.jpg@jpg` always renders JPEG
-and caches as JPEG. Use pinned extensions for OpenGraph/RSS/email images; use
-auto-negotiation for in-page `<img>` tags.
+**Mitigation where it matters — use `f:jpg`, NOT `@jpg`:**
+
+```
+.../rs:fit:800/f:jpg/plain/s3://<bucket>/img/blog/x.jpg      ✅ pinned AND cached
+.../rs:fit:800/plain/s3://<bucket>/img/blog/x.jpg@jpg        ❌ pinned, NOT cached
+```
+
+Both pin the output format. But Cloudflare's default static caching keys off the
+**URL's trailing extension**, and the `@jpg` form ends the path in `.jpg@jpg`,
+which Cloudflare does not recognise — measured `cf-cache-status: DYNAMIC` on
+every repeat request, i.e. every hit goes to origin. The `f:jpg` processing
+option leaves the path ending in `.jpg`, and measured `MISS` → `HIT`.
+
+Use `f:jpg` for OpenGraph/RSS/email images; use auto-negotiation for in-page
+`<img>` tags.
 
 Do not add a Cloudflare cache rule unless verification actually shows repeat
 `MISS`es — the default static-asset caching covers this given the headers above.
@@ -205,6 +220,19 @@ curl -so /dev/null -w '%{http_code}\n' \
 
 Step 5 is the one that matters given the shared bucket. Re-run it after any
 change to the key, `ALLOWED_SOURCES`, or the bucket layout.
+
+### Results at go-live (2026-07-21)
+
+| Check | Result |
+|-|-|
+| `rs:fit:800` on a 2000×2000 source | 200, 800×800, `image/avif` |
+| `cache-control` | `public, max-age=31536000` |
+| Repeat request | `cf-cache-status: HIT` |
+| Off-bucket source (`https://…`, other bucket) | 404 |
+| `backups/…` real dump filename via CDN | 404 |
+| B2 key listing `backups/` directly | `unauthorized` (server-side, `restricted to files that start with 'img/'`) |
+| `f:jpg` | `image/jpeg`, MISS → HIT |
+| `@jpg` | `image/jpeg`, `DYNAMIC` (uncached — see above) |
 
 Confirm dimensions with `curl ... | file -` — `rs:fit:800` bounds the *longest*
 side to 800, it does not force width.
