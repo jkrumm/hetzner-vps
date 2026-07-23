@@ -34,7 +34,7 @@ services:
         max-file: '3'
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.image-gen-gateway.rule=Host(`image.${DOMAIN}`)'
+      - 'traefik.http.routers.image-gen-gateway.rule=Host(`image-gateway.${DOMAIN}`)'
       - 'traefik.http.routers.image-gen-gateway.entrypoints=websecure'
       - 'traefik.http.routers.image-gen-gateway.tls.certresolver=letsencrypt'
       - 'traefik.http.routers.image-gen-gateway.middlewares=security-headers@file'
