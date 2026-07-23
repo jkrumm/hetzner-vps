@@ -1,0 +1,51 @@
+# Production compose for the VPS — TEMPLATE.
+# Place in the vps repo at apps/image-gen-gateway/compose.yml. Mirrors apps/research-gateway/compose.yml.
+# Tailscale-only: DNS-only (grey) A record image.${DOMAIN} -> VPS Tailscale IP; NOT behind the
+# cloudflared tunnel (same pattern as argo / audio-gateway / research-gateway). Traefik labels are
+# identical to a public service — tailnet-only is enforced at the DNS layer. Deploys are
+# label-driven via rollhook (OIDC).
+# `${DOMAIN}` comes from the vps top-level .env; `.env` here is materialized by `op inject`.
+
+services:
+  image-gen-gateway:
+    image: ${IMAGE_GEN_GATEWAY_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/image-gen-gateway:latest}}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 7716
+      NODE_ENV: production
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+      - monitoring-net
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:7716/health']
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.image-gen-gateway.rule=Host(`image.${DOMAIN}`)'
+      - 'traefik.http.routers.image-gen-gateway.entrypoints=websecure'
+      - 'traefik.http.routers.image-gen-gateway.tls.certresolver=letsencrypt'
+      - 'traefik.http.routers.image-gen-gateway.middlewares=security-headers@file'
+      - 'traefik.http.services.image-gen-gateway.loadbalancer.server.port=7716'
+      - 'traefik.http.services.image-gen-gateway.loadbalancer.healthcheck.path=/health'
+      - 'com.centurylinklabs.watchtower.enable=false'
+      # rollhook OIDC authorization — only this repo may deploy this container
+      - 'rollhook.allowed_repos=jkrumm/image-gen'
+
+networks:
+  proxy:
+    external: true
+  monitoring-net:
+    external: true

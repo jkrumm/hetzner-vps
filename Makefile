@@ -14,6 +14,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
         research-gateway-up research-gateway-down research-gateway-env research-gateway-bootstrap-image \
+        image-gen-gateway-up image-gen-gateway-down image-gen-gateway-env image-gen-gateway-redeploy image-gen-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
@@ -262,6 +263,45 @@ research-gateway-env: require-prod
 	op --account tkrumm inject -i apps/research-gateway/.env.tpl -o apps/research-gateway/.env -f
 	chmod 644 apps/research-gateway/.env
 	@echo "Wrote apps/research-gateway/.env (chmod 644, gitignored)"
+
+## image-gen-gateway stack (Bun image API, RollHook-managed) — apps/image-gen-gateway/compose.yml
+## Deploys to image.jkrumm.com (Tailscale-only, grey-cloud A record — NOT the cloudflared
+## tunnel). RollHook deploys on push to jkrumm/image-gen:master touching gateway/** or shared/**.
+##
+## Same image-pinning dance as research-gateway-up above, for the same reason: RollHook
+## tags by git SHA and never moves :latest, so a naive `up -d` would roll the container
+## back to a stale :latest.
+image-gen-gateway-up: require-prod
+	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=image-gen-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	if [ -z "$$IMG" ]; then \
+	  echo "  no running container — genesis start from :latest (bootstrap-seeded)"; \
+	  $(OP_RUN) docker compose -f apps/image-gen-gateway/compose.yml --env-file apps/image-gen-gateway/.env up -d; \
+	else \
+	  echo "  pinning image-gen-gateway → $$IMG"; \
+	  $(OP_RUN) env IMAGE_GEN_GATEWAY_IMAGE=$$IMG docker compose -f apps/image-gen-gateway/compose.yml --env-file apps/image-gen-gateway/.env up -d; \
+	fi
+image-gen-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/image-gen-gateway/compose.yml --env-file apps/image-gen-gateway/.env down
+
+## Trigger a fresh RollHook deploy of image-gen-gateway via workflow_dispatch.
+## NOT the empty-commit trick the other -redeploy targets use: image-gen's deploy.yml is
+## path-filtered (gateway/**, shared/**, the workflow itself), so an empty commit touches
+## none of those paths and would silently do nothing.
+image-gen-gateway-redeploy: require-dev
+	@if [ ! -d $$HOME/SourceRoot/image-gen ]; then echo "  ✗ image-gen repo not found at ~/SourceRoot/image-gen"; exit 1; fi
+	@gh workflow run deploy.yml --repo jkrumm/image-gen --ref master && \
+	  echo "  ✓ dispatched — watch the build at https://github.com/jkrumm/image-gen/actions"
+## One-shot bootstrap — clone image-gen repo, build image, push :initial to
+## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
+## deploys against. Re-runnable. Builds from the REPO ROOT (bun monorepo).
+image-gen-gateway-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/image-gen-gateway/scripts/bootstrap-image.sh
+## Materialize apps/image-gen-gateway/.env from .env.tpl. Required so RollHook's
+## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
+## rotating any image-gen-gateway secret. Resulting .env is chmod 644 and gitignored.
+image-gen-gateway-env: require-prod
+	op --account tkrumm inject -i apps/image-gen-gateway/.env.tpl -o apps/image-gen-gateway/.env -f
+	chmod 644 apps/image-gen-gateway/.env
+	@echo "Wrote apps/image-gen-gateway/.env (chmod 644, gitignored)"
 
 ## modelpick stack (Bun + TanStack Start SSR, RollHook-managed) — apps/modelpick/compose.yml
 ## Deploys to modelpick.jkrumm.com. RollHook deploys on push to jkrumm/modelpick:master.
