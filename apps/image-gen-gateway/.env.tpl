@@ -3,6 +3,14 @@
 # Place this file in the vps repo at apps/image-gen-gateway/.env.tpl and re-run the env target
 # after rotating any secret.
 
+# Traefik's Host() rule interpolates ${DOMAIN} from THIS file, not the vps repo's top-level
+# .env. RollHook runs `docker compose up --scale` directly — it does not go through `op run` —
+# so anything compose.yml interpolates has to be resolvable here or it silently becomes the
+# empty string. Omitting this produced a live router rule of Host(`image.`), which Traefik
+# accepts without complaint and then 404s every request against, on a container reporting
+# perfectly healthy.
+DOMAIN=op://vps/config/DOMAIN
+
 # Gateway's own bearer
 API_SECRET=op://vps/image-gen-gateway/API_SECRET
 
