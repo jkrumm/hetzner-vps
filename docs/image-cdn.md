@@ -13,6 +13,15 @@ will consume this same substrate — nothing here is specific to it.
 client → Cloudflare edge (cache) → tunnel → Traefik → imgproxy → B2 img/ (private)
 ```
 
+**This doc covers the CDN substrate only.** The image lives in a layered
+delivery chain: local truth (files on disk) → `image-share` (a bearer-auth'd
+service on the homelab; **share** = local → private, **publish** = private →
+public, and `publish` always stages a durable homelab copy before anything
+reaches this CDN) → the CDN documented here. The agent door into that whole
+chain is the `/img` skill (`dotfiles`); the private layer's own contract —
+schema, endpoints, key model — lives in image-share's `docs/design.md`. Don't
+duplicate that design here; this doc stays scoped to imgproxy/B2/Cloudflare.
+
 ---
 
 ## The bucket is shared with backups — read this first
@@ -72,9 +81,14 @@ Anyone who knows an object key can render it. That is intended for phase 1.
 The bucket stays **private** — B2 never serves it directly, only imgproxy reads
 from it.
 
-**Upgrading to signed URLs later:** set `IMGPROXY_KEY` and `IMGPROXY_SALT`. The
-placeholder signature slot immediately stops being accepted, so every consumer
-must be migrated to generating HMAC signatures in the same change.
+**Staying unsigned is a permanent decision, not a deferred upgrade.** Every
+published URL — vault embeds, jkrumm.com articles, `imgcli` output, image-share's
+`cdnUrl` responses — is an unsigned literal baked into whatever it was pasted
+into. Flipping `IMGPROXY_KEY`/`IMGPROXY_SALT` would invalidate all of them at
+once, with no way to retrofit a signature into already-published text. The
+access model is, and stays, the private bucket + the prefix-locked read-only
+key + non-enumerable opaque names under `img/gen/` and `img/misc/`. Don't
+budget for a signed-URL migration; it isn't planned.
 
 ---
 
@@ -155,7 +169,8 @@ B2 account key inventory:
 | `b2-admin-jkrumm` | bucket `jkrumm`, incl. `deleteFiles` | `op://Private/Backblaze B2` (`MASTER_*` fields) | homelab `make restic-prune` / `restic-init` |
 | `b2-shared-append-only` | bucket `jkrumm`, no delete | `op://common/backblaze-s3` | backup scripts (vps pg/mariadb, homelab restic) |
 | `imgproxy-read` | bucket `jkrumm`, **prefix `img/`**, read-only | `op://vps/imgproxy` | imgproxy |
-| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | uploads (photoflow, Obsidian, agents) |
+| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | `imgcli sync` only (legacy bulk mirror lane) — `imgcli upload` and all agent/Obsidian uploads now go through image-share's API instead |
+| `image-share-b2` | bucket `jkrumm`, **prefix `img/`**, `listFiles`/`readFiles`/`writeFiles`/`deleteFiles` | `op://homelab/image-share/{B2_KEY_ID,B2_APP_KEY}` | the image-share service on the homelab — the sole delete-capable key ever wired into automation |
 
 > The `MASTER_*` field names in `op://Private/Backblaze B2` are historical and
 > **do not hold the master key** — they hold `b2-admin-jkrumm`. The names are
@@ -179,6 +194,17 @@ b2 account clear
 
 Neither gets `deleteFiles` — uploads must not be able to destroy originals, and
 the CDN must not be able to write at all.
+
+**Deletion is not impossible, though — it's scoped and gated.** The dedicated
+`image-share-b2` key (see the inventory above) carries `deleteFiles`, and it is
+reachable only through image-share's `DELETE /api/b2/:key` (bearer-auth'd,
+traversal-guarded on the decoded key). No agent machine and no other credential
+in this repo holds delete capability — the read-only and no-delete keys above
+are the norm, not a gap.
+
+B2 has a lifecycle rule on `img/`: hidden (overwritten or deleted) versions are
+purged after 30 days. Deletes and overwrites through `image-share-b2` no longer
+accrete invisible version debris in the bucket.
 
 > **Capture the output in the same command that stores it.** B2 prints the
 > `applicationKey` exactly once; a create whose secret you don't persist leaves
