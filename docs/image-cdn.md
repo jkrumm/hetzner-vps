@@ -169,7 +169,7 @@ B2 account key inventory:
 | `b2-admin-jkrumm` | bucket `jkrumm`, incl. `deleteFiles` | `op://Private/Backblaze B2` (`MASTER_*` fields) | homelab `make restic-prune` / `restic-init` |
 | `b2-shared-append-only` | bucket `jkrumm`, no delete | `op://common/backblaze-s3` | backup scripts (vps pg/mariadb, homelab restic) |
 | `imgproxy-read` | bucket `jkrumm`, **prefix `img/`**, read-only | `op://vps/imgproxy` | imgproxy |
-| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | `imgcli sync` only (legacy bulk mirror lane) — `imgcli upload` and all agent/Obsidian uploads now go through image-share's API instead |
+| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | `imgcli sync` (legacy bulk mirror lane) plus `imgcli ls`/`info`/`url` (read-only) and `publish`'s `CDN_BASE` lookup — `imgcli upload` and all agent/Obsidian uploads now go through image-share's API instead |
 | `image-share-b2` | bucket `jkrumm`, **prefix `img/`**, `listFiles`/`readFiles`/`writeFiles`/`deleteFiles` | `op://homelab/image-share/{B2_KEY_ID,B2_APP_KEY}` | the image-share service on the homelab — the sole delete-capable key ever wired into automation |
 
 > The `MASTER_*` field names in `op://Private/Backblaze B2` are historical and
