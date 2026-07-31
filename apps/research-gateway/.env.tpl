@@ -19,6 +19,13 @@ TAVILY_API_KEY=op://common/tavily/API_KEY
 # Context7 (optional)
 CONTEXT7_API_KEY=op://vps/research-gateway/CONTEXT7_API_KEY
 
+# GitHub (githubFile / githubRepo / findPackages source-of-truth tools). They work
+# unauthenticated, but anonymous GitHub is 60 req/h PER IP shared by every worker of every
+# concurrent job; a fine-grained PAT with NO permissions (public read only) raises it to
+# 5000/h. The 1Password field may be left EMPTY — the gateway treats empty as unset and
+# falls back to anonymous — but the field must EXIST or `op inject` fails on a missing ref.
+GITHUB_TOKEN=op://vps/research-gateway/GITHUB_TOKEN
+
 # Telemetry → argo
 # internal docker route — argo is Tailscale-only (grey-cloud); the container posts to argo-api directly, not the public host
 ARGO_USAGE_URL=http://argo-api:4000/usage/records
