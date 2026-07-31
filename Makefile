@@ -9,6 +9,7 @@ OP_RUN = op run --account tkrumm --env-file=.env.tpl --
 
 .PHONY: help require-prod require-dev \
         up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
+        rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
         fpp-backup fpp-shell fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
@@ -106,6 +107,16 @@ infra-up:        require-prod ; $(OP_RUN) docker compose -f compose.infra.yml up
 infra-down:      require-prod ; $(OP_RUN) docker compose -f compose.infra.yml down
 monitoring-up:   require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml up -d
 monitoring-down: require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml down
+
+## Pull the newest ghcr.io/jkrumm/rollhook:latest and recreate the container.
+## RollHook deploys every other app but cannot deploy itself; Watchtower only
+## picks it up at the 04:00 sweep. Use this to take a fresh release immediately.
+## Prints the running version afterwards — the container publishes no host port,
+## so the probe goes through `docker exec`.
+rollhook-update: require-prod
+	$(OP_RUN) docker compose -f compose.networking.yml pull rollhook
+	$(OP_RUN) docker compose -f compose.networking.yml up -d rollhook
+	@sleep 5; echo "  running: $$(docker exec rollhook curl -sf http://localhost:7700/health || echo '<not answering yet>')"
 
 ## FPP stack (MariaDB now; fpp-server + fpp-analytics later) — apps/fpp/compose.yml
 ## On a fresh server: networking-up first, then fpp-cert-sync, then fpp-up.
