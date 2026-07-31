@@ -11,7 +11,11 @@ API_SECRET=op://vps/research-gateway/API_SECRET
 # IU unified endpoint
 IU_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 IU_API_KEY=op://common/anthropic/API_KEY
-IU_MODEL=DeepSeek-V4-Pro
+# Model choice is NOT configured here. The lead and worker models come from the defaults
+# in the app's src/env.ts, which carry the rationale for the current choice. An IU_MODEL
+# var used to sit here pinned to DeepSeek-V4-Pro; nothing ever read it, so it silently
+# misdescribed the running config. Setting a model here would override the code default —
+# do that only to pin a deliberate exception, and say why.
 
 # Tavily
 TAVILY_API_KEY=op://common/tavily/API_KEY
