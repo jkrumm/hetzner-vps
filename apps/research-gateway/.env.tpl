@@ -38,11 +38,16 @@ GITHUB_TOKEN=op://vps/research-gateway/GITHUB_TOKEN
 # Turn this off once the sidecar has a track record; leaving it on only costs a call on pages
 # the sidecar already failed to render.
 JINA_ENABLED=true
-# OPTIONAL rate-limit lever only (20 -> 500 RPM). A key on an account with NO BALANCE returns
-# HTTP 402 on every request — the gateway then retries anonymously and logs it, but there is
-# no reason to set an unfunded key. Verified 2026-08-02: a fresh free key 402'd while
-# anonymous access returned 200.
-# JINA_API_KEY=op://vps/research-gateway/JINA_API_KEY
+# JINA_API_KEY is an OPTIONAL rate-limit lever only (20 -> 500 RPM) and is deliberately not
+# set here. A key on an account with NO BALANCE returns HTTP 402 on every request — the gateway
+# then retries anonymously and logs it, but there is no reason to set an unfunded key. Verified
+# 2026-08-02: a fresh free key 402'd while anonymous access returned 200.
+#
+# Do NOT reintroduce it as a commented-out line pointing at a vault field. `op inject`
+# substitutes refs inside comments too, so a commented ref to a field that does not exist fails
+# the whole injection — which is why this file's previous revision could not be materialized at
+# all, and why JINA_ENABLED above never actually reached production. (This paragraph therefore
+# names no ref: writing one here, even in prose, would reproduce the bug it describes.)
 
 # Telemetry → argo
 # internal docker route — argo is Tailscale-only (grey-cloud); the container posts to argo-api directly, not the public host
