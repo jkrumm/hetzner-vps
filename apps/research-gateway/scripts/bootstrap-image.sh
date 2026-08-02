@@ -29,16 +29,30 @@ fi
 echo "[2/4] docker login ${REGISTRY}"
 echo "${ROLLHOOK_SECRET}" | docker login "${REGISTRY}" -u rollhook --password-stdin
 
-echo "[3/4] Build ${REGISTRY}/research-gateway:initial"
+echo "[3/5] Build ${REGISTRY}/research-gateway:initial"
 docker build \
   -t "${REGISTRY}/research-gateway:initial" \
   -t "${REGISTRY}/research-gateway:latest" \
   -f "${SRC_DIR}/Dockerfile" \
   "${SRC_DIR}"
 
-echo "[4/4] Push images"
+# The JavaScript-rendering sidecar. Seeded here for the same reason as the gateway image and
+# one more: RollHook tags by git SHA and never moves :latest, so CI alone never produces the
+# :latest tag that compose.yml defaults to. Until this has run once, `research-gateway-up`
+# has no sidecar image to start and the deploy-lightpanda.yml workflow has no container to
+# authorize against.
+echo "[4/5] Build ${REGISTRY}/research-gateway-lightpanda:initial"
+docker build \
+  -t "${REGISTRY}/research-gateway-lightpanda:initial" \
+  -t "${REGISTRY}/research-gateway-lightpanda:latest" \
+  -f "${SRC_DIR}/lightpanda/Dockerfile" \
+  "${SRC_DIR}/lightpanda"
+
+echo "[5/5] Push images"
 docker push "${REGISTRY}/research-gateway:initial"
 docker push "${REGISTRY}/research-gateway:latest"
+docker push "${REGISTRY}/research-gateway-lightpanda:initial"
+docker push "${REGISTRY}/research-gateway-lightpanda:latest"
 
 echo
 echo "Done. Now:"
