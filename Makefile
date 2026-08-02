@@ -3,7 +3,39 @@ export
 
 ENV ?= dev
 
-OP_RUN = op run --account tkrumm --env-file=.env.tpl --
+# Secret injection — TWO injectors, deliberately.
+#
+# The runner: prefer the `secrets-run` shim wherever it exists (the two Macs), where
+# it is a drop-in `op` replacement — on the MacBook it passes through to live
+# biometric `op`, on the headless mini it resolves from the age-encrypted offline
+# cache. The VPS has no secrets-run and a working `op`, so prod keeps the direct
+# call and nothing about prod changes.
+#
+# A bare `op` is not usable on the mini: with no human to answer its biometric
+# prompt it does not fail, it BLOCKS. One `make up` sat wedged for 19 hours
+# (2026-08-01 15:16 → 2026-08-02). secrets-run fails closed in a second instead.
+#
+# The template: prod targets get the full .env.tpl; require-dev targets get
+# .env.dev.tpl, which is the ~12 refs the local stack actually needs rather than
+# all ~40. That split is what makes the dev stack runnable on the mini at all —
+# see the header of .env.dev.tpl for the reasoning behind each line, and
+# dotfiles-private/headless.refs for which of them the mini may hold offline.
+SECRET_RUNNER = $(shell command -v secrets-run >/dev/null 2>&1 \
+	&& echo 'secrets-run run' \
+	|| echo 'op run --account tkrumm')
+
+OP_RUN     = $(SECRET_RUNNER) --env-file=.env.tpl --
+OP_RUN_DEV = $(SECRET_RUNNER) --env-file=.env.dev.tpl --
+
+# For the handful of targets documented as "works in both envs" (postgres-setup,
+# shell-postgres, db-counts, fpp-shell). They must follow ENV rather than pick a
+# side: the local containers are created with the DEV-ONLY superuser passwords
+# from .env.dev.tpl, so handing them prod's values simply fails to authenticate.
+ifeq ($(ENV),prod)
+OP_RUN_ENV = $(OP_RUN)
+else
+OP_RUN_ENV = $(OP_RUN_DEV)
+endif
 
 .DEFAULT_GOAL := help
 
@@ -80,9 +112,9 @@ else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "→ Detected existing Redis/Valkey on :6379 — skipping the dev valkey service"; \
 		echo "  Apps still connect to localhost:6379 either way."; \
-		$(OP_RUN) docker compose -f compose.dev.yml up -d postgres mariadb clickstack; \
+		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d postgres mariadb clickstack; \
 	else \
-		$(OP_RUN) docker compose -f compose.dev.yml up -d; \
+		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d; \
 	fi
 endif
 
@@ -97,7 +129,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) infra-down
 	$(MAKE) networking-down
 else
-	$(OP_RUN) docker compose -f compose.dev.yml down
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml down
 endif
 
 ## Individual prod stacks — targeted restarts
@@ -158,7 +190,7 @@ fpp-sync-from-prod: require-dev
 	./apps/fpp/scripts/sync-mariadb-from-vps.sh
 ## Interactive mariadb shell — works in both envs (resolves the local mariadb container).
 fpp-shell:
-	$(OP_RUN) sh -c 'docker exec -it -e MYSQL_PWD="$$MARIADB_ROOT_PASSWORD" mariadb mariadb -u root "$$MARIADB_DB"'
+	$(OP_RUN_ENV) sh -c 'docker exec -it -e MYSQL_PWD="$$MARIADB_ROOT_PASSWORD" mariadb mariadb -u root "$$MARIADB_DB"'
 
 ## bun-email-api stack (Bun + Resend, RollHook-managed) — apps/bun-email-api/compose.yml
 ## Stateless, no DB. RollHook deploys on push to jkrumm/bun-email-api:master.
@@ -389,7 +421,7 @@ basalt-ui-marketing-bootstrap-image: require-prod
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:
-	$(OP_RUN) ./scripts/setup-postgres.sh
+	$(OP_RUN_ENV) ./scripts/setup-postgres.sh
 
 ## Materialize /etc/vps/*.env for cron jobs from cron/*.env.tpl (via op inject).
 ## Re-run after rotating a referenced secret.
@@ -407,14 +439,17 @@ backup: require-prod
 # production. It is a gated, human-only DR tool: scripts/restore-pg.sh
 # (see docs/disaster-recovery.md).
 ## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → local. Validates DR chain. Drops whole local DB.
+## MacBook-only: keeps the full .env.tpl because it needs the S3 backup credential,
+## which is deliberately not cached on the mini. To get prod DATA onto the mini use
+## sync-from-prod (pg_dump over SSH, no credential) — this target is the DR drill.
 restore-local: require-dev
 	$(OP_RUN) ./scripts/restore-pg-local.sh
 ## Dev — fresh whole-DB sync from prod Postgres over SSH (no S3). Drops whole local DB.
 sync-from-prod: require-dev
-	$(OP_RUN) ./scripts/sync-pg-from-vps.sh
+	$(OP_RUN_DEV) ./scripts/sync-pg-from-vps.sh
 ## Dev — per-schema sync from prod (SCHEMA=argo). Least-priv, leaves other schemas intact.
 pg-sync-schema: require-dev
-	SCHEMA="$(SCHEMA)" $(OP_RUN) ./scripts/sync-pg-schema-from-vps.sh
+	SCHEMA="$(SCHEMA)" $(OP_RUN_DEV) ./scripts/sync-pg-schema-from-vps.sh
 
 ## UFW status + rules — prod-only (the dev box has its own firewall).
 firewall: require-prod
@@ -422,7 +457,7 @@ firewall: require-prod
 
 ## Interactive psql shell — works in both envs.
 shell-postgres:
-	$(OP_RUN) docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+	$(OP_RUN_ENV) docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}
 
 ## Exact per-table row counts (Postgres all schemas + MariaDB fpp). Read-only,
 ## both envs, diff-friendly — use to verify two DB states match after sync/restore.

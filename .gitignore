@@ -8,6 +8,11 @@ traefik/acme.json
 *.env
 !*.env.tpl
 !.env.tpl
+# `.env.*` above also swallows .env.dev.tpl, and neither negation covers it
+# (`!*.env.tpl` needs a char before `.env`, `!.env.tpl` is an exact name). It is
+# op:// references only, same as .env.tpl, and must be tracked — the dev stack
+# does not start without it.
+!.env.dev.tpl
 
 # OS
 .DS_Store
