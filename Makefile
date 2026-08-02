@@ -53,7 +53,7 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
-        postgres-setup cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
+        postgres-setup dev-db-passwords cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -444,6 +444,14 @@ backup: require-prod
 ## sync-from-prod (pg_dump over SSH, no credential) — this target is the DR drill.
 restore-local: require-dev
 	$(OP_RUN) ./scripts/restore-pg-local.sh
+## Dev — converge the local superuser passwords onto .env.dev.tpl. Idempotent.
+## Both images apply their password variable ONLY when initializing an EMPTY data
+## directory, so a volume created before the dev-only credentials existed keeps
+## whatever password initialized it — silently, with healthy containers and passing
+## healthchecks, because those use the unix socket. Only TCP connections fail.
+dev-db-passwords: require-dev
+	$(OP_RUN_DEV) ./scripts/dev-db-passwords.sh
+
 ## Dev — fresh whole-DB sync from prod Postgres over SSH (no S3). Drops whole local DB.
 sync-from-prod: require-dev
 	$(OP_RUN_DEV) ./scripts/sync-pg-from-vps.sh
