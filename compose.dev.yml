@@ -1,8 +1,23 @@
 ---
-# Local dev infra — Postgres + Valkey with ports exposed for direct app connections.
-# Uses op run --env-file=.env.tpl via OP_RUN in Makefile.
+# Local dev infra — Postgres, Valkey, MariaDB, ClickStack for local app development.
+# Injected via $(OP_RUN_DEV) (--env-file=.env.dev.tpl) in the Makefile — the narrow
+# dev template, NOT the prod .env.tpl. See that file's header.
 # Usage: make up (with ENV=dev in .env)
 #        make postgres-setup (provisions schemas/users)
+#
+# EVERY published port binds 127.0.0.1 explicitly. Docker's default is 0.0.0.0,
+# which on the Mac mini — the always-on dev host — means the tailnet interface too,
+# leaving a Tailscale ACL as the only thing between other machines and a Postgres
+# superuser or an unauthenticated Valkey. That is the wrong layer for it: an ACL is
+# a shared, remotely-editable document covering the whole tailnet, and the current
+# grant (tcp:7700-7799 between Macs) protects these ports only by not mentioning
+# them. Every other dev container on the mini already binds loopback.
+#
+# Apps reach these over localhost; the HyperDX UI is reached through Caddy
+# (hyperdx.test locally, https://hyperdx.mini.jkrumm.com on the tailnet), which
+# proxies to localhost and so is unaffected. If something later genuinely needs
+# cross-machine DB access, that is a deliberate port grant plus an explicit bind
+# change here — not a default nobody chose.
 
 services:
 
@@ -14,7 +29,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-dev-data:/var/lib/postgresql
     healthcheck:
@@ -27,7 +42,7 @@ services:
     image: valkey/valkey:9
     container_name: redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - valkey-dev-data:/data
 
@@ -44,7 +59,7 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
     ports:
-      - "13306:3306"
+      - "127.0.0.1:13306:3306"
     volumes:
       - mariadb-dev-data:/var/lib/mysql
     healthcheck:
@@ -69,10 +84,10 @@ services:
     image: clickhouse/clickstack-all-in-one:latest
     container_name: clickstack
     ports:
-      - "7707:8080"   # HyperDX UI
-      - "4317:4317"   # OTLP gRPC (authed)
-      - "4318:4318"   # OTLP HTTP (authed) — kept for parity testing
-      - "4319:4319"   # OTLP HTTP (unauthed, dev default)
+      - "127.0.0.1:7707:8080"   # HyperDX UI
+      - "127.0.0.1:4317:4317"   # OTLP gRPC (authed)
+      - "127.0.0.1:4318:4318"   # OTLP HTTP (authed) — kept for parity testing
+      - "127.0.0.1:4319:4319"   # OTLP HTTP (unauthed, dev default)
       - "127.0.0.1:8123:8123"  # ClickHouse HTTP — loopback-only for direct OTEL queries
                                # from the host (used by /otel skill --transport http).
     volumes:
