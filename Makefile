@@ -3,6 +3,9 @@ export
 
 ENV ?= dev
 
+# Compose derives volume names as <project>_<name>, project defaulting to this dir.
+MARIADB_DEV_VOLUME ?= $(notdir $(CURDIR))_mariadb-dev-data
+
 # Secret injection — TWO injectors, deliberately.
 #
 # The runner: prefer the `secrets-run` shim wherever it exists (the two Macs), where
@@ -53,7 +56,7 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
-        postgres-setup dev-db-passwords cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
+        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -451,6 +454,22 @@ restore-local: require-dev
 ## healthchecks, because those use the unix socket. Only TCP connections fail.
 dev-db-passwords: require-dev
 	$(OP_RUN_DEV) ./scripts/dev-db-passwords.sh
+
+## Dev — DESTROY and re-initialize the local FPP MariaDB volume. Destructive.
+## The only in-place way to change a root password whose volume predates the
+## dev-only credentials: unlike Postgres, MariaDB root has no socket-trust path,
+## so an ALTER needs the CURRENT password — prod's, deliberately not cached here.
+## Re-init is the route that needs no prod credential at all. Repopulate after
+## with `make fpp-sync-from-prod`, which also needs none.
+## Guarded: pass CONFIRM=yes.
+dev-mariadb-reset: require-dev
+	@[ "$(CONFIRM)" = "yes" ] || { \
+		echo "refusing: this DELETES volume $(MARIADB_DEV_VOLUME) and every local FPP row in it."; \
+		echo "re-run with CONFIRM=yes (then: make fpp-sync-from-prod)"; exit 1; }
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml rm -sf mariadb
+	docker volume rm $(MARIADB_DEV_VOLUME)
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d mariadb
+	@echo "  ✓ mariadb re-initialized from .env.dev.tpl — now run 'make fpp-sync-from-prod'"
 
 ## Dev — fresh whole-DB sync from prod Postgres over SSH (no S3). Drops whole local DB.
 sync-from-prod: require-dev
