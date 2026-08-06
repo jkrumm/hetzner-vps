@@ -22,7 +22,20 @@ services:
       # and the gateway is meant to be readable without materializing one. Unset it to take
       # the renderer out of the fetch chain without redeploying the gateway image.
       LIGHTPANDA_URL: http://research-gateway-lightpanda:7781
-    mem_limit: 512m
+    # Sized against RESEARCH_MAX_CONCURRENCY=3, the same "concurrency x per-unit memory is ONE
+    # decision" reasoning the sidecar's mem_limit below is written up with.
+    #
+    # Raised 512m -> 1g on 2026-08-06 after the container pinned at 510.1 MiB / 512 MiB with
+    # CPU at 222% running just TWO concurrent `standard` jobs. It was not OOM-killed: the
+    # process survived and kept executing jobs while its HTTP listener died — no socket left
+    # on 7780, `docker inspect` healthcheck FailingStreak 8, every request 404ing, and the
+    # in-memory job store taking both in-flight jobs with it. A wedged-but-running container
+    # is a worse failure than a clean OOM kill, because restart policies never fire.
+    #
+    # What made a previously-fine limit too small: video sources. A YouTube page used to
+    # return 1,731 chars of player chrome and now returns up to TEXT_CAP (80,000), and
+    # `findVideos` pulls ~1.3 MB of search HTML per call. 512m predates both.
+    mem_limit: 1g
     security_opt:
       - no-new-privileges:true
     volumes:
