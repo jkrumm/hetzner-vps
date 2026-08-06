@@ -248,7 +248,6 @@ apps/fpp/scripts/sync-mariadb-from-vps.sh  Dev — ssh vps + docker exec mariadb
 apps/fpp/scripts/cert-sync.sh        Extract *.free-planning-poker.com cert from traefik/acme.json + FLUSH SSL
 apps/fpp/fail2ban/                   filter + jail configs installed by setup.sh
 apps/fpp/certs/                      gitignored — populated by cert-sync.sh, mounted RO into mariadb
-config/rollhook/rollhook.config.yaml  RollHook app registry — one entry per deployed app
 traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
 traefik/dynamic/middlewares.yml  rate-limit, security-headers, tailscale-only
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
@@ -337,7 +336,7 @@ mysql://fpp:<password>@db.free-planning-poker.com:33306/free-planning-poker?ssl=
 | `fpp-analytics` | `rollhook.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
 | `fpp-analytics-updater` | same as fpp-analytics | `mariadb-net` | manual `docker compose up -d` after image change |
 
-Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.free-planning-poker.com` doesn't match the `mariadb` hostname). See `apps/fpp/MIGRATION.md` for the bootstrap and cutover runbook.
+Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.free-planning-poker.com` doesn't match the `mariadb` hostname).
 
 ---
 

@@ -19,7 +19,6 @@
 #   4. make fpp-mariadb-setup       (provisions fpp user + grants)
 #   5. Manual one-shot: docker login rollhook.jkrumm.com, build+push initial
 #      fpp-server / fpp-analytics images so the registry has something to pull.
-#      See apps/fpp/MIGRATION.md → Bootstrap section.
 
 networks:
   mariadb-net:

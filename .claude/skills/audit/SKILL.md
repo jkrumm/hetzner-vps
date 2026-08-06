@@ -13,7 +13,7 @@ Run a full health audit of the VPS across 8 sequential phases, then offer to fix
 
 ## Instructions
 
-Run all 8 phases first to gather data. Produce the structured report after all phases complete. Then for each WARN/CRITICAL finding, propose the specific fix and ask for confirmation before executing.
+Run all 8 phases first to gather data. Produce the structured report after all phases complete. Then, for each WARN/CRITICAL finding: auto-fix reversible remediations (container restart, dangling-image prune, log rotation, re-pull, service reload) and report what was done; confirm first only for irreversible or outward-facing changes (volume deletion, data-destroying prune, cert/DNS/tunnel changes, anything touching backups or a public endpoint).
 
 ### Phase 1: System Resources
 
@@ -238,7 +238,7 @@ External TLS verify (db.free-planning-poker.com): <OK / FAILED>
 
 ## Repair Actions
 
-For each CRITICAL/WARN finding, propose the fix and ask for confirmation before running.
+For each CRITICAL/WARN finding: auto-fix reversible remediations (container restart, dangling-image prune, log rotation, re-pull, service reload) and report what was done; confirm first only for irreversible or outward-facing changes (volume deletion, data-destroying prune, cert/DNS/tunnel changes, anything touching backups or a public endpoint).
 
 | Finding | Proposed Fix |
 |-|-|
