@@ -8,9 +8,10 @@
 # URL scheme — UNSIGNED (no IMGPROXY_KEY / IMGPROXY_SALT):
 #   https://img.${DOMAIN}/insecure/rs:fit:800/plain/s3://<bucket>/img/fuji/x.jpg@webp
 # Omitting key+salt puts imgproxy in unsigned mode, where the `/insecure` prefix
-# is required. Access control is therefore NOT the URL — it is the prefix lock
-# below plus non-enumerable object keys. Signing is a deliberate later upgrade:
-# set IMGPROXY_KEY + IMGPROXY_SALT and `/insecure` stops being accepted.
+# is required. Access control is therefore NOT the URL — it is the B2 key's
+# server-enforced `img/` name-prefix (authoritative) plus IMGPROXY_ALLOWED_SOURCES
+# below (defence in depth) and non-enumerable object keys. Staying unsigned is a
+# permanent decision, not a deferred upgrade — see docs/image-cdn.md for why.
 #
 # !! THIS BUCKET ALSO HOLDS DATABASE BACKUPS under backups/. The credential here
 # MUST be an application key created with `--name-prefix img/` — B2 enforces that
