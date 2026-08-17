@@ -22,6 +22,14 @@ services:
       # and the gateway is meant to be readable without materializing one. Unset it to take
       # the renderer out of the fetch chain without redeploying the gateway image.
       LIGHTPANDA_URL: http://research-gateway-lightpanda:7781
+      # Ship the JSON log stream to ClickStack over the unauthed :4319 OTLP port on the docker
+      # bridge — same wiring as argo/fpp/imgproxy/modelpick, and the gateway was already on
+      # monitoring-net without using it. Without this, every log dies with the container on
+      # each deploy: 72h of prod logs held 513 lines because the container was 20 minutes old,
+      # which makes the blocked-host evidence the fetch chain records unusable for picking the
+      # next site adapter. Unset it to fall back to console-only logging without a rebuild.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: research-gateway
     # Sized against RESEARCH_MAX_CONCURRENCY=3, the same "concurrency x per-unit memory is ONE
     # decision" reasoning the sidecar's mem_limit below is written up with.
     #
