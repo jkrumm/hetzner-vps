@@ -18,6 +18,9 @@
 networks:
   proxy:
     external: true
+  # Reaches ClickStack's unauthed OTLP receiver (clickstack:4319) for traces + logs.
+  monitoring-net:
+    external: true
 
 services:
   audio-gateway:
@@ -41,6 +44,9 @@ services:
       USAGE_SOURCE_LABEL: ${USAGE_SOURCE_LABEL}
       ARGO_API_SECRET: ${ARGO_API_SECRET}
       MACHINE: ${MACHINE}
+      # Traces + logs → ClickStack (HyperDX). Unset disables the exporter entirely.
+      # SQLite/Argo usage rows stay the cost accounting; this is the timeline view.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.
       - /var/lib/audio-gateway:/data
@@ -65,6 +71,7 @@ services:
       - "rollhook.allowed_repos=jkrumm/audio-gateway"
     networks:
       - proxy
+      - monitoring-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
