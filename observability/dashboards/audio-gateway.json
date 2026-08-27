@@ -367,16 +367,25 @@
     },
     {
       "config": {
-        "displayType": "search",
-        "select": "Timestamp, SpanName, StatusCode, Duration",
+        "configType": "sql",
+        "connectionId": "69cd0b07911482e6218c0ef5",
+        "displayType": "table",
+        "onClick": {
+          "target": {
+            "mode": "id",
+            "source": "Traces"
+          },
+          "type": "search",
+          "whereLanguage": "sql",
+          "whereTemplate": "TraceId = '{{TraceId}}'"
+        },
         "source": "Traces",
-        "where": "ServiceName:\"audio-gateway\" AND SpanKind:Server",
-        "whereLanguage": "lucene"
+        "sqlTemplate": "SELECT Timestamp, SpanName AS Operation, StatusCode AS Status, round(Duration / 1e6) AS ms, SpanAttributes['audio.model'] AS Model, SpanAttributes['audio.caller'] AS Caller, TraceId FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanKind = 'Server' AND $__filters ORDER BY Timestamp DESC LIMIT 25"
       },
       "containerId": "recent",
       "h": 7,
       "id": "6a8ff05a09140756bb266fe0",
-      "name": "Recent requests (click a row for the trace waterfall)",
+      "name": "Recent requests \u2014 click a row to open its spans",
       "w": 24,
       "x": 0,
       "y": 23
