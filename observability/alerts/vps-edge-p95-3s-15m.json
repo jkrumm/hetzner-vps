@@ -12,5 +12,5 @@
   "source": "tile",
   "threshold": 3000000000,
   "thresholdType": "above",
-  "tile": "Edge p95 latency (ms)"
+  "tile": "Edge p95 latency"
 }
