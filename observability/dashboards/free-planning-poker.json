@@ -408,8 +408,8 @@
         "displayType": "search",
         "select": "Timestamp, ServiceName, SeverityText, Body",
         "source": "Logs",
-        "where": "ServiceName IN ('fpp-server', 'fpp-analytics') AND SeverityText IN ('error', 'fatal')",
-        "whereLanguage": "sql"
+        "where": "(ServiceName:\"fpp-server\" OR ServiceName:\"fpp-analytics\") AND (SeverityText:error OR SeverityText:fatal)",
+        "whereLanguage": "lucene"
       },
       "containerId": "rooms",
       "h": 6,

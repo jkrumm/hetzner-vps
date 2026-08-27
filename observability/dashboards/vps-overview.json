@@ -449,8 +449,8 @@
         "displayType": "search",
         "select": "Timestamp, Body",
         "source": "Logs",
-        "where": "ServiceName = 'rollhook' AND Body LIKE 'Deploy:%'",
-        "whereLanguage": "sql"
+        "where": "ServiceName:rollhook",
+        "whereLanguage": "lucene"
       },
       "containerId": "errors",
       "h": 7,
@@ -465,8 +465,8 @@
         "displayType": "search",
         "select": "Timestamp, ServiceName, SeverityText, Body",
         "source": "Logs",
-        "where": "SeverityNumber >= 17",
-        "whereLanguage": "sql"
+        "where": "SeverityNumber:>=17",
+        "whereLanguage": "lucene"
       },
       "containerId": "errors",
       "h": 7,

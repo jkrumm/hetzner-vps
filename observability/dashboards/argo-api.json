@@ -311,8 +311,8 @@
         "displayType": "search",
         "select": "Timestamp, SeverityText, Body",
         "source": "Logs",
-        "where": "ServiceName = 'argo-api'",
-        "whereLanguage": "sql"
+        "where": "ServiceName:\"argo-api\"",
+        "whereLanguage": "lucene"
       },
       "containerId": "errors",
       "h": 6,

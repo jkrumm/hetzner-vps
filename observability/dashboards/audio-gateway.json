@@ -13,7 +13,7 @@
     {
       "collapsed": false,
       "id": "stages",
-      "title": "Pipeline stages (child spans) and upstreams"
+      "title": "Pipeline stages \u2014 where a request spends its time (child spans)"
     },
     {
       "collapsed": false,
@@ -262,6 +262,34 @@
     },
     {
       "config": {
+        "displayType": "bar",
+        "groupBy": "replaceOne(SpanName, 'audio.', '')",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'audio-gateway' AND SpanKind != 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "stages",
+      "h": 7,
+      "id": "6a8ff05a09140756bb266fdf",
+      "name": "Where the time goes \u2014 p95 per pipeline stage",
+      "w": 12,
+      "x": 0,
+      "y": 7
+    },
+    {
+      "config": {
         "asRatio": false,
         "displayType": "table",
         "groupBy": "SpanName",
@@ -332,46 +360,18 @@
       "containerId": "stages",
       "h": 7,
       "id": "6a8ff05a09140756bb266fde",
-      "name": "Stages: calls / errors / p50 / p95 (ms) \u2014 click a row to search its spans",
-      "w": 24,
-      "x": 0,
-      "y": 0
-    },
-    {
-      "config": {
-        "displayType": "bar",
-        "groupBy": "SpanName",
-        "select": [
-          {
-            "aggFn": "quantile",
-            "alias": "p95",
-            "level": 0.95,
-            "numberFormat": {
-              "factor": 1e-09,
-              "output": "duration"
-            },
-            "valueExpression": "Duration",
-            "where": "ServiceName = 'audio-gateway' AND SpanKind != 'Server'",
-            "whereLanguage": "sql"
-          }
-        ],
-        "source": "Traces"
-      },
-      "containerId": "stages",
-      "h": 6,
-      "id": "6a8ff05a09140756bb266fdf",
-      "name": "Where the time goes \u2014 p95 per pipeline stage",
-      "w": 24,
-      "x": 0,
+      "name": "Stages: calls / errors / p50 / p95 \u2014 click a row to search its spans",
+      "w": 12,
+      "x": 12,
       "y": 7
     },
     {
       "config": {
         "displayType": "search",
-        "select": "Timestamp, SpanName, StatusCode, round(Duration/1e6), SpanAttributes['audio.model'], SpanAttributes['audio.caller']",
+        "select": "Timestamp, SpanName, StatusCode, Duration",
         "source": "Traces",
-        "where": "ServiceName = 'audio-gateway' AND SpanKind = 'Server'",
-        "whereLanguage": "sql"
+        "where": "ServiceName:\"audio-gateway\" AND SpanKind:Server",
+        "whereLanguage": "lucene"
       },
       "containerId": "recent",
       "h": 7,
