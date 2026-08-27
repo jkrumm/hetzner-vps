@@ -344,34 +344,19 @@
       "containerId": "stages",
       "h": 7,
       "id": "6a8ff05a09140756bb266fde",
-      "name": "Stages: calls / errors / p50 / p95 (ms) (click a row to search its spans)",
+      "name": "Stages: calls / errors / p50 / p95 (ms) \u2014 click a row to search its spans",
       "w": 24,
       "x": 0,
-      "y": 10
+      "y": 0
     },
     {
       "config": {
-        "asRatio": false,
-        "displayType": "line",
-        "fillNulls": true,
+        "displayType": "bar",
+        "groupBy": "SpanName",
         "select": [
           {
             "aggFn": "quantile",
-            "alias": "STT p50",
-            "level": 0.5,
-            "numberFormat": {
-              "factor": 1e-06,
-              "mantissa": 0,
-              "output": "number",
-              "thousandSeparated": true
-            },
-            "valueExpression": "Duration",
-            "where": "ServiceName = 'audio-gateway' AND SpanName = 'audio.stt.upstream'",
-            "whereLanguage": "sql"
-          },
-          {
-            "aggFn": "quantile",
-            "alias": "STT p95",
+            "alias": "p95 (ms)",
             "level": 0.95,
             "numberFormat": {
               "factor": 1e-06,
@@ -380,35 +365,7 @@
               "thousandSeparated": true
             },
             "valueExpression": "Duration",
-            "where": "ServiceName = 'audio-gateway' AND SpanName = 'audio.stt.upstream'",
-            "whereLanguage": "sql"
-          },
-          {
-            "aggFn": "quantile",
-            "alias": "TTS chunk p50",
-            "level": 0.5,
-            "numberFormat": {
-              "factor": 1e-06,
-              "mantissa": 0,
-              "output": "number",
-              "thousandSeparated": true
-            },
-            "valueExpression": "Duration",
-            "where": "ServiceName = 'audio-gateway' AND SpanName = 'audio.synth.chunk'",
-            "whereLanguage": "sql"
-          },
-          {
-            "aggFn": "quantile",
-            "alias": "TTS chunk p95",
-            "level": 0.95,
-            "numberFormat": {
-              "factor": 1e-06,
-              "mantissa": 0,
-              "output": "number",
-              "thousandSeparated": true
-            },
-            "valueExpression": "Duration",
-            "where": "ServiceName = 'audio-gateway' AND SpanName = 'audio.synth.chunk'",
+            "where": "ServiceName = 'audio-gateway' AND SpanKind != 'Server'",
             "whereLanguage": "sql"
           }
         ],
@@ -417,10 +374,10 @@
       "containerId": "stages",
       "h": 6,
       "id": "6a8ff05a09140756bb266fdf",
-      "name": "Upstream latency p50 / p95 (ms): STT (audio.stt.upstream) vs TTS (audio.synth.chunk)",
+      "name": "Where the time goes \u2014 p95 per pipeline stage (ms)",
       "w": 24,
       "x": 0,
-      "y": 17
+      "y": 7
     },
     {
       "config": {
