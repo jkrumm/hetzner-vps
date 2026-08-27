@@ -469,17 +469,23 @@ print: those use Postgres `n_live_tup` (stale until ANALYZE) and MariaDB `TABLE_
 
 ---
 
-## Upgrading Postgres or Valkey
+## Upgrading Postgres, Valkey or MariaDB
 
-Both are excluded from Watchtower auto-updates. Apply manually.
+All three are excluded from Watchtower auto-updates, and a restart alone does not
+help — Docker reuses the image already on disk. They only move when one of these
+targets runs, so check them periodically (`/audit` phase 8).
 
 **Patch/minor (same major):**
 ```bash
-make backup
-op run --env-file=.env.tpl -- docker compose -f compose.infra.yml pull postgres   # or valkey
-op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d postgres
-make shell-postgres   # verify: SELECT version();
+make backup && make infra-upgrade          # postgres + valkey; prints both versions
+make fpp-backup && make fpp-mariadb-upgrade # mariadb; prints the version
+make db-counts                              # verify row counts match the pre-upgrade run
 ```
+
+Both targets name their services explicitly rather than recreating the whole file.
+For MariaDB that is load-bearing: `apps/fpp/compose.yml` also holds the
+RollHook-managed `fpp-server` and `fpp-analytics`, and an unscoped `up -d` would
+recreate them off `:latest`, undoing the last deploy.
 
 **Postgres major upgrade (e.g., 18 → 19):** Dump with current version, update image tag in `compose.infra.yml`, restore into new container via the gated `scripts/restore-pg.sh` (see `docs/disaster-recovery.md`). Always backup first.
 

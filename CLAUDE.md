@@ -26,6 +26,10 @@ make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
 make imgproxy-up / make imgproxy-down
 
+# Manual image upgrades — Postgres/Valkey/MariaDB are excluded from Watchtower
+make infra-upgrade       # postgres + valkey (run make backup first)
+make fpp-mariadb-upgrade # mariadb only (run make fpp-backup first)
+
 # DB schema/user provisioning — idempotent, works for both envs
 make postgres-setup      # run after make infra-up, before make monitoring-up
 make fpp-mariadb-setup   # run after make fpp-up
@@ -489,12 +493,18 @@ bash /home/jkrumm/vps/scripts/setup.sh
 
 ## Upgrade Procedures
 
+Postgres, Valkey and MariaDB opt out of Watchtower, so patch releases only land
+by hand. Watchtower is not a fallback here — a plain restart reuses the image
+already on disk, so these drift indefinitely until one of these targets runs.
+
 **Patch/minor (same major):**
 ```bash
-make backup
-op run --env-file=.env.tpl -- docker compose -f compose.infra.yml pull <service>
-op run --env-file=.env.tpl -- docker compose -f compose.infra.yml up -d <service>
+make backup && make infra-upgrade        # postgres + valkey
+make fpp-backup && make fpp-mariadb-upgrade
 ```
+Both targets are scoped to their services. That matters for MariaDB: a bare
+`compose up -d` on `apps/fpp/compose.yml` would also recreate the RollHook-managed
+`fpp-server` / `fpp-analytics` off `:latest` and revert the last deploy.
 
 **Postgres major version (e.g., 18 → 19):**
 Use the gated `scripts/restore-pg.sh` pattern (see `docs/disaster-recovery.md`): dump from old, update image tag in `compose.infra.yml`, restore into new. Or use `pg_upgrade` in place. Always test on a copy first.

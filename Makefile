@@ -43,10 +43,10 @@ endif
 .DEFAULT_GOAL := help
 
 .PHONY: help require-prod require-dev \
-        up down networking-up networking-down infra-up infra-down monitoring-up monitoring-down \
+        up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
-        fpp-backup fpp-shell fpp-restore-local fpp-sync-from-prod \
+        fpp-backup fpp-mariadb-upgrade fpp-shell fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
         research-gateway-up research-gateway-down research-gateway-env research-gateway-bootstrap-image \
@@ -143,6 +143,17 @@ infra-down:      require-prod ; $(OP_RUN) docker compose -f compose.infra.yml do
 monitoring-up:   require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml up -d
 monitoring-down: require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml down
 
+## Manual image upgrade for the stateful infra containers (Postgres + Valkey).
+## Both opt out of Watchtower, so patch releases only land through this target.
+## ALWAYS `make backup` first. Same-major only — a major bump is the dump/restore
+## procedure in docs/disaster-recovery.md, not this.
+## Service-scoped on purpose: a bare `compose up -d` would also churn anything
+## else in the file.
+infra-upgrade: require-prod
+	$(OP_RUN) docker compose -f compose.infra.yml pull postgres valkey
+	$(OP_RUN) docker compose -f compose.infra.yml up -d postgres valkey
+	@sleep 5; docker exec postgres postgres --version; docker exec redis valkey-server --version | cut -d, -f1
+
 ## Pull the newest ghcr.io/jkrumm/rollhook:latest and recreate the container.
 ## RollHook deploys every other app but cannot deploy itself; Watchtower only
 ## picks it up at the 04:00 sweep. Use this to take a fresh release immediately.
@@ -179,6 +190,17 @@ fpp-env: require-prod
 ## FPP MariaDB → S3 backup (cron 03:30 in prod; manual via this target).
 fpp-backup: require-prod
 	$(OP_RUN) ./apps/fpp/scripts/backup-mariadb.sh
+
+## Manual MariaDB image upgrade — opted out of Watchtower like the other stateful
+## containers. ALWAYS `make fpp-backup` first. Scoped to the mariadb service so the
+## RollHook-managed fpp-server / fpp-analytics containers in the same file are left
+## alone — a bare `compose up -d` there would recreate them off `:latest` and undo
+## whatever RollHook last deployed.
+fpp-mariadb-upgrade: require-prod
+	$(OP_RUN) docker compose -f apps/fpp/compose.yml pull mariadb
+	$(OP_RUN) docker compose -f apps/fpp/compose.yml up -d mariadb
+	@sleep 5; docker exec mariadb mariadbd --version
+
 # NOTE: restoring PROD MariaDB from S3 has NO make target by design — it overwrites
 # production. It is a gated, human-only DR tool: apps/fpp/scripts/restore-mariadb.sh
 # (see docs/disaster-recovery.md).

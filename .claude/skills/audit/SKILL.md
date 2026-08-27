@@ -154,9 +154,20 @@ Then use WebSearch to check:
 - Latest stable `mariadb` LTS version on hub.docker.com/\_/mariadb
 - Any active CVEs for the running major versions
 
+Compare against what is actually running, not just the tag:
+
+```bash
+ssh vps "docker exec postgres postgres --version; docker exec redis valkey-server --version | cut -d, -f1; docker exec mariadb mariadbd --version"
+```
+
 **Thresholds:**
 - WARN: a newer major version has been stable for 3+ months
-- INFO: patch/minor updates within pinned major (Watchtower handles image pulls on restart)
+- WARN: a patch release inside the pinned major is available. Watchtower does NOT
+  cover these — the containers opt out, and a restart reuses the on-disk image, so
+  they drift until upgraded by hand.
+
+Remediation: `make backup && make infra-upgrade`, `make fpp-backup && make
+fpp-mariadb-upgrade`, then `make db-counts` against the pre-upgrade output.
 
 ### Phase 9: FPP MariaDB Exception (TCP 33306 public)
 
@@ -253,9 +264,9 @@ For each CRITICAL/WARN finding: auto-fix reversible remediations (container rest
 | Apt security updates available | `ssh vps "sudo apt upgrade -y --only-upgrade"` (VPS has NOPASSWD sudo) |
 | Postgres backup >48h old | `ssh vps "cd ~/vps && ENV=prod make backup"` |
 | MariaDB backup >48h old | `ssh vps "cd ~/vps && ENV=prod make fpp-backup"` |
-| Postgres upgrade available | See "Upgrade Procedures" in CLAUDE.md — backup first, then pull + recreate |
-| Valkey upgrade available | See "Upgrade Procedures" in CLAUDE.md — pull + recreate (data in volume) |
-| MariaDB upgrade available (patch/minor) | `ssh vps "cd ~/vps && ENV=prod make fpp-backup"` first, then pull + `make fpp-up` |
+| Postgres upgrade available | `make backup && make infra-upgrade` (major bump: see "Upgrade Procedures" in CLAUDE.md) |
+| Valkey upgrade available | `make backup && make infra-upgrade` — same target as Postgres (data in volume) |
+| MariaDB upgrade available (patch/minor) | `ssh vps "cd ~/vps && make fpp-backup && make fpp-mariadb-upgrade"` — never `make fpp-up`, which would also recreate the RollHook-managed fpp-server/fpp-analytics off `:latest` |
 | fail2ban mariadb jail not active | `ssh vps "sudo systemctl restart fail2ban && sudo fail2ban-client status mariadb"` |
 | MariaDB cert <7d from expiry | `ssh vps "cd ~/vps && make fpp-cert-sync"` (forces re-extraction from acme.json + FLUSH SSL) |
 | MariaDB non-TLS connection succeeded (CRITICAL) | Check `--require-secure-transport=ON` in `apps/fpp/compose.yml` is intact, then `ssh vps "cd ~/vps && make fpp-up"` to apply |
