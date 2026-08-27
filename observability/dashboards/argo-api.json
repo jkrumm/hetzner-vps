@@ -55,7 +55,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -109,7 +109,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -155,7 +155,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -186,7 +186,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0ef9"
+        "source": "Logs"
       },
       "containerId": "health",
       "h": 3,
@@ -212,7 +212,7 @@
           }
         ],
         "seriesLimit": 8,
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "routes",
       "h": 6,
@@ -228,7 +228,7 @@
         "connectionId": "69cd0b07911482e6218c0ef5",
         "displayType": "line",
         "fillNulls": true,
-        "sourceId": "69cd0b07911482e6218c0efb",
+        "source": "Traces",
         "sqlTemplate": "SELECT $__timeInterval(Timestamp) AS ts, SpanAttributes['http.route'] AS Route, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Server' AND $__filters AND SpanAttributes['http.route'] IN (SELECT SpanAttributes['http.route'] FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Server' AND SpanAttributes['http.route'] != '' GROUP BY 1 ORDER BY count() DESC LIMIT 8) GROUP BY ts, Route ORDER BY ts LIMIT 5000"
       },
       "containerId": "routes",
@@ -246,14 +246,14 @@
         "displayType": "table",
         "onClick": {
           "target": {
-            "id": "69cd0b07911482e6218c0efb",
-            "mode": "id"
+            "mode": "id",
+            "source": "Traces"
           },
           "type": "search",
           "whereLanguage": "sql",
           "whereTemplate": "ServiceName = 'argo-api' AND SpanKind = 'Server' AND SpanAttributes['http.request.method'] = '{{Method}}' AND SpanAttributes['http.route'] = '{{Route}}'"
         },
-        "sourceId": "69cd0b07911482e6218c0efb",
+        "source": "Traces",
         "sqlTemplate": "SELECT SpanAttributes['http.request.method'] AS Method, SpanAttributes['http.route'] AS Route, count() AS Requests, countIf(StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500') AS Errors, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Server' AND SpanAttributes['http.route'] != '' AND $__filters GROUP BY Method, Route HAVING Requests >= 3 ORDER BY p95_ms DESC LIMIT 30"
       },
       "containerId": "routes",
@@ -269,7 +269,7 @@
         "configType": "sql",
         "connectionId": "69cd0b07911482e6218c0ef5",
         "displayType": "table",
-        "sourceId": "69cd0b07911482e6218c0efb",
+        "source": "Traces",
         "sqlTemplate": "SELECT if(SpanAttributes['db.system'] != '', concat('postgres ', SpanName), SpanAttributes['server.address']) AS Dependency, count() AS Calls, countIf(StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '400') AS Errors, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Client' AND $__filters GROUP BY Dependency ORDER BY Calls DESC LIMIT 25"
       },
       "containerId": "deps",
@@ -296,7 +296,7 @@
           }
         ],
         "seriesLimit": 8,
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "errors",
       "h": 6,
@@ -310,7 +310,7 @@
       "config": {
         "displayType": "search",
         "select": "Timestamp, SeverityText, Body",
-        "sourceId": "69cd0b07911482e6218c0ef9",
+        "source": "Logs",
         "where": "ServiceName = 'argo-api'",
         "whereLanguage": "sql"
       },
@@ -338,7 +338,7 @@
           }
         ],
         "seriesLimit": 6,
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "browser",
       "h": 5,

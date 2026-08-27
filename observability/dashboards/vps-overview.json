@@ -51,7 +51,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -105,7 +105,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -149,7 +149,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -194,7 +194,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0ef9"
+        "source": "Logs"
       },
       "containerId": "now",
       "h": 4,
@@ -219,7 +219,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "services",
       "h": 6,
@@ -262,7 +262,7 @@
           }
         ],
         "showOperandSeries": false,
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "services",
       "h": 6,
@@ -294,7 +294,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "services",
       "h": 6,
@@ -319,8 +319,8 @@
             }
           ],
           "target": {
-            "id": "69cd0b07911482e6218c0efb",
-            "mode": "id"
+            "mode": "id",
+            "source": "Traces"
           },
           "type": "search",
           "whereLanguage": "sql"
@@ -370,7 +370,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "services",
       "h": 6,
@@ -395,7 +395,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "edge",
       "h": 6,
@@ -419,13 +419,13 @@
             }
           ],
           "target": {
-            "id": "69cd0b07911482e6218c0efb",
-            "mode": "id"
+            "mode": "id",
+            "source": "Traces"
           },
           "type": "search",
           "whereLanguage": "sql"
         },
-        "sourceId": "69cd0b07911482e6218c0efb",
+        "source": "Traces",
         "sqlTemplate": "SELECT SpanAttributes['server.address'] AS Host, count() AS Requests, countIf(StatusCode = 'Error') AS `5xx`, round(quantile(0.95)(Duration) / 1e6) AS `p95 (ms)` FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND $__filters GROUP BY Host ORDER BY Requests DESC LIMIT 20"
       },
       "containerId": "edge",
@@ -440,7 +440,7 @@
       "config": {
         "displayType": "event_patterns",
         "select": "",
-        "sourceId": "69cd0b07911482e6218c0ef9",
+        "source": "Logs",
         "where": "SeverityNumber >= 17",
         "whereLanguage": "sql"
       },
@@ -456,7 +456,7 @@
       "config": {
         "displayType": "search",
         "select": "Timestamp, Body",
-        "sourceId": "69cd0b07911482e6218c0ef9",
+        "source": "Logs",
         "where": "ServiceName = 'rollhook' AND Body LIKE 'Deploy:%'",
         "whereLanguage": "sql"
       },
@@ -472,7 +472,7 @@
       "config": {
         "displayType": "search",
         "select": "Timestamp, ServiceName, SeverityText, Body",
-        "sourceId": "69cd0b07911482e6218c0ef9",
+        "source": "Logs",
         "where": "SeverityNumber >= 17",
         "whereLanguage": "sql"
       },

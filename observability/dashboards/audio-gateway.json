@@ -51,7 +51,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -99,7 +99,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -143,7 +143,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -187,7 +187,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "now",
       "h": 4,
@@ -212,7 +212,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "trends",
       "h": 6,
@@ -258,7 +258,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "trends",
       "h": 6,
@@ -288,8 +288,8 @@
             }
           ],
           "target": {
-            "id": "69cd0b07911482e6218c0efb",
-            "mode": "id"
+            "mode": "id",
+            "source": "Traces"
           },
           "type": "search",
           "whereLanguage": "sql"
@@ -339,7 +339,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "stages",
       "h": 7,
@@ -412,7 +412,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "stages",
       "h": 6,
@@ -426,7 +426,7 @@
       "config": {
         "displayType": "search",
         "select": "Timestamp, SpanName, StatusCode, round(Duration/1e6), SpanAttributes['audio.model'], SpanAttributes['audio.caller']",
-        "sourceId": "69cd0b07911482e6218c0efb",
+        "source": "Traces",
         "where": "ServiceName = 'audio-gateway' AND SpanKind = 'Server'",
         "whereLanguage": "sql"
       },

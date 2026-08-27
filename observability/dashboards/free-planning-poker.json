@@ -55,7 +55,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -109,7 +109,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -155,7 +155,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -192,7 +192,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "health",
       "h": 3,
@@ -230,7 +230,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "server",
       "h": 6,
@@ -271,7 +271,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "server",
       "h": 6,
@@ -289,8 +289,8 @@
         "groupByColumnsOnLeft": true,
         "onClick": {
           "target": {
-            "id": "69cd0b07911482e6218c0efb",
-            "mode": "id"
+            "mode": "id",
+            "source": "Traces"
           },
           "type": "search",
           "whereLanguage": "sql",
@@ -325,7 +325,7 @@
             "whereLanguage": "sql"
           }
         ],
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "analytics",
       "h": 6,
@@ -351,7 +351,7 @@
           }
         ],
         "seriesLimit": 8,
-        "sourceId": "69cd0b07911482e6218c0efb"
+        "source": "Traces"
       },
       "containerId": "browser",
       "h": 6,
@@ -366,7 +366,7 @@
         "configType": "sql",
         "connectionId": "69cd0b07911482e6218c0ef5",
         "displayType": "table",
-        "sourceId": "69cd0b07911482e6218c0efb",
+        "source": "Traces",
         "sqlTemplate": "SELECT replaceRegexpOne(path(SpanAttributes['location.href']), '^/room/[^/]+', '/room/:name') AS Page, count() AS Loads, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'free-planning-poker' AND SpanName = 'documentLoad' AND $__filters GROUP BY Page ORDER BY Loads DESC LIMIT 10"
       },
       "containerId": "browser",
@@ -393,7 +393,7 @@
           }
         ],
         "seriesLimit": 5,
-        "sourceId": "69cd0b07911482e6218c0ef9"
+        "source": "Logs"
       },
       "containerId": "rooms",
       "h": 6,
@@ -407,7 +407,7 @@
       "config": {
         "displayType": "search",
         "select": "Timestamp, ServiceName, SeverityText, Body",
-        "sourceId": "69cd0b07911482e6218c0ef9",
+        "source": "Logs",
         "where": "ServiceName IN ('fpp-server', 'fpp-analytics') AND SeverityText IN ('error', 'fatal')",
         "whereLanguage": "sql"
       },

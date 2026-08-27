@@ -33,6 +33,12 @@
 # GET /dashboards, /saved-searches, /webhooks and fails with a clear message
 # naming the unresolved reference. Run `make hyperdx-webhook-setup` before
 # applying any alert that references a webhook by name.
+#
+# Dashboard tiles carry the same problem one level down: a tile's `sourceId`
+# (and a table tile's row-click search target, when it points at a source)
+# are per-env ids too. Both get swapped for the source NAME on export and
+# resolved back via GET /sources on apply, failing clearly on an unknown
+# source name.
 # =============================================================================
 set -euo pipefail
 
@@ -88,13 +94,15 @@ cmd_export() {
   resolve_env "$env"
   mkdir -p "$DASH_DIR" "$ALERT_DIR"
 
-  local dash_resp
+  local dash_resp source_resp
   dash_resp=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
+  source_resp=$(curl -fsS "${BASE}/api/api/v2/sources" -H "Authorization: Bearer ${KEY}")
 
-  HDX_RESP="$dash_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
+  HDX_RESP="$dash_resp" HDX_SOURCE="$source_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
 import json
 import os
 import re
+import sys
 
 # Top-level only — server-owned fields on the dashboard document itself.
 # Nested ids (tiles[].id, tiles[].containerId, containers[].id, ...) are
@@ -112,12 +120,45 @@ def strip(dash):
     return {k: v for k, v in dash.items() if k not in STRIP_KEYS}
 
 
+# Tile configs embed per-env source ids (config.sourceId, and a table tile's
+# "click a row to search" link at config.onClick.target when its mode is
+# "id" — the only other id shape in the tile schema) — both make `apply`
+# fail into a different env. Swap every one for the source's NAME instead:
+# any dict with a "sourceId" key, or any {"mode": "id", "id": <sourceId>}
+# shape, gets that id replaced by a "source" key holding the name. Matching
+# is by id membership in the known source map, not by JSON path, so an
+# unrelated onClick target (e.g. type "dashboard", where target.id is a
+# dashboard id, not a source id) is left untouched.
+def resolve_source_refs(obj, source_name_by_id, dash_name):
+    if isinstance(obj, dict):
+        obj = dict(obj)
+        if isinstance(obj.get("sourceId"), str):
+            sid = obj.pop("sourceId")
+            name = source_name_by_id.get(sid)
+            if name is None:
+                sys.exit(f"ERROR: dashboard '{dash_name}' references unknown sourceId {sid}")
+            obj["source"] = name
+        elif (
+            obj.get("mode") == "id"
+            and isinstance(obj.get("id"), str)
+            and obj["id"] in source_name_by_id
+        ):
+            obj["source"] = source_name_by_id[obj.pop("id")]
+        return {k: resolve_source_refs(v, source_name_by_id, dash_name) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [resolve_source_refs(v, source_name_by_id, dash_name) for v in obj]
+    return obj
+
+
 resp = json.loads(os.environ["HDX_RESP"])
+sources = json.loads(os.environ["HDX_SOURCE"]).get("data", [])
+source_name_by_id = {s["id"]: s.get("name") for s in sources}
 out_dir = os.environ["HDX_DIR"]
 dashboards = resp.get("data", [])
 count = 0
 for dash in dashboards:
     cleaned = strip(dash)
+    cleaned = resolve_source_refs(cleaned, source_name_by_id, cleaned.get("name", "dashboard"))
     slug = slugify(dash.get("name", "dashboard"))
     path = os.path.join(out_dir, f"{slug}.json")
     with open(path, "w") as f:
@@ -220,17 +261,57 @@ cmd_apply() {
   if [[ ${#files[@]} -eq 0 ]]; then
     echo "no dashboard files to apply"
   else
-    local existing
+    local existing source_resp
     existing=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
+    source_resp=$(curl -fsS "${BASE}/api/api/v2/sources" -H "Authorization: Bearer ${KEY}")
 
     for file in "${files[@]}"; do
       echo "--> ${file}"
+
+      local body
+      if ! body=$(HDX_SOURCE="$source_resp" HDX_FILE="$file" python3 <<'PY'
+import json
+import os
+import sys
+
+sources = json.loads(os.environ["HDX_SOURCE"]).get("data", [])
+source_id_by_name = {s.get("name"): s["id"] for s in sources}
+
+with open(os.environ["HDX_FILE"]) as f:
+    dash = json.load(f)
+
+# Inverse of the export-time transform: any dict holding a "source" key
+# (name) is either a tile config's source reference or an onClick target —
+# distinguish by "mode" and restore the id under the matching key.
+def restore_source_refs(obj, dash_name):
+    if isinstance(obj, dict):
+        obj = dict(obj)
+        if isinstance(obj.get("source"), str):
+            name = obj.pop("source")
+            source_id = source_id_by_name.get(name)
+            if source_id is None:
+                sys.exit(f"ERROR: dashboard '{dash_name}' references unknown source '{name}'")
+            key = "id" if obj.get("mode") == "id" else "sourceId"
+            obj[key] = source_id
+        return {k: restore_source_refs(v, dash_name) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [restore_source_refs(v, dash_name) for v in obj]
+    return obj
+
+resolved = restore_source_refs(dash, dash.get("name", "dashboard"))
+print(json.dumps(resolved))
+PY
+      ); then
+        echo "  ✗ ${body}"
+        failed=1
+        continue
+      fi
 
       local validate_resp valid
       validate_resp=$(curl -fsS -X POST "${BASE}/api/api/v2/dashboards/validate" \
         -H "Authorization: Bearer ${KEY}" \
         -H "Content-Type: application/json" \
-        --data-binary @"$file")
+        --data-binary "$body")
       valid=$(python3 -c "import json,sys; print(json.load(sys.stdin)['valid'])" <<<"$validate_resp")
 
       if [[ "$valid" != "True" ]]; then
@@ -245,7 +326,7 @@ for e in json.load(sys.stdin)['errors']:
       fi
 
       local name existing_id
-      name=$(python3 -c "import json,sys; print(json.load(sys.stdin)['name'])" <"$file")
+      name=$(python3 -c "import json,sys; print(json.load(sys.stdin)['name'])" <<<"$body")
       existing_id=$(HDX_NAME="$name" python3 -c "
 import json, os, sys
 name = os.environ['HDX_NAME']
@@ -258,13 +339,13 @@ print(match['id'] if match else '')
         curl -fsS -X PUT "${BASE}/api/api/v2/dashboards/${existing_id}" \
           -H "Authorization: Bearer ${KEY}" \
           -H "Content-Type: application/json" \
-          --data-binary @"$file" >/dev/null
+          --data-binary "$body" >/dev/null
         echo "  ✓ updated ${name} (${existing_id})"
       else
         curl -fsS -X POST "${BASE}/api/api/v2/dashboards" \
           -H "Authorization: Bearer ${KEY}" \
           -H "Content-Type: application/json" \
-          --data-binary @"$file" >/dev/null
+          --data-binary "$body" >/dev/null
         echo "  ✓ created ${name}"
       fi
     done
