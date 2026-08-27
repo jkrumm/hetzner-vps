@@ -56,7 +56,8 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
-        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune
+        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune \
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-export hyperdx-apply clickstack-restart
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -452,6 +453,31 @@ postgres-setup:
 ## Re-run after rotating a referenced secret.
 cron-env-seed: require-prod
 	./scripts/seed-cron-env.sh
+
+## HyperDX agent user — idempotent, prod-only. Ensures op://vps/clickstack/AGENT_*
+## resolves to a working HyperDX user + MCP-capable accessKey. Re-run after rotation.
+hyperdx-agent-setup: require-prod
+	./scripts/hyperdx-agent-setup.sh
+
+## HyperDX local dev user — idempotent, dev-only. Registers/refreshes
+## ~/.config/hyperdx/local.env (email/password/accessKey) against the local
+## clickstack container. Safe to re-run.
+hyperdx-dev-bootstrap: require-dev
+	./scripts/hyperdx-dev-bootstrap.sh
+
+## Dashboards-as-code — export every dashboard from ENV to observability/dashboards/*.json.
+hyperdx-export:
+	./scripts/hyperdx-sync.sh export $(ENV)
+
+## Dashboards-as-code — validate + upsert (by name) dashboards from
+## observability/dashboards/ (or FILES=...) into ENV.
+hyperdx-apply:
+	./scripts/hyperdx-sync.sh apply $(ENV) $(FILES)
+
+## Dev — restart clickstack only. Fixes a dead local ClickHouse process while
+## the all-in-one container still reports healthy (the healthcheck only covers the UI).
+clickstack-restart: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml restart clickstack
 
 ## Status — docker ps with name/status/ports
 ps:

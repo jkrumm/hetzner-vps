@@ -299,6 +299,91 @@ cd ~/SourceRoot/argo && git commit --allow-empty -m "chore: redeploy after Hyper
 
 Internal services on `:4319` don't need rotation — they don't use the key.
 
+## Agent access — MCP + REST
+
+Agents (Claude Code sessions, sideclaw's `otel` tool) reach ClickStack over two
+HTTP surfaces, both proxied by the HyperDX UI container and both authenticated
+with a HyperDX **user access key** — not the OTLP ingestion key above, a
+different credential with a different threat model (see "Two credentials"
+below).
+
+### The two URLs
+
+| Surface | URL | Shape |
+|-|-|-|
+| MCP (agent tools) | `<base>/api/mcp` | `POST`, stateless Streamable HTTP. Reply is SSE (`event: message` / `data: {json}`), even for a single request/response. |
+| REST v2 | `<base>/api/api/v2/{dashboards,alerts,webhooks,savedSearches,sources,connections,team}` | Plain JSON. The doubled `/api` is correct — the UI's `/api/*` proxy forwards into the HyperDX API, which itself mounts the external router at `/api/v2`. |
+
+`<base>` is `https://hyperdx.${DOMAIN}` in prod (Tailscale-only DNS — reachable
+from the VPS host itself and from any tailnet machine) and
+`http://localhost:7707` in dev (`compose.dev.yml` publishes `8080→7707`).
+
+Both headers on every call: `Authorization: Bearer <access key>`,
+`Content-Type: application/json`. MCP additionally needs
+`Accept: application/json, text/event-stream`.
+
+### Two credentials, not one
+
+| Credential | Scope | Where it lives | Who holds it |
+|-|-|-|-|
+| OTLP ingestion key (`HYPERDX_API_KEY`, rotation above) | write-only — accepts telemetry | public, embedded in frontend bundles | any browser |
+| HyperDX **user access key** | full read/write on everything the user can see — dashboards, alerts, saved searches, MCP tools | `users.accessKey` in Mongo | one human, or one dedicated agent user |
+
+The user access key is the same credential the HyperDX UI itself uses once
+you're logged in — it is not a scoped API token. Handing it to an agent means
+handing that agent the same power a logged-in human has.
+
+### Why a dedicated agent user
+
+The human's own HyperDX login is a real password behind a real login form —
+screenshots, session cookies, and manual dashboard edits all go through it. An
+agent needs the access key on disk (mini-cached, headless-readable) to call
+MCP/REST unattended. Rather than cache the human's password-derived key
+there, `make hyperdx-agent-setup` provisions a **second** HyperDX user
+(`op://vps/clickstack/AGENT_EMAIL`) whose access key is a value **we** choose
+(`AGENT_ACCESS_KEY`) — so the human's own credential never needs to leave
+their session, and the agent's key can be rotated or revoked independently by
+deleting/re-inviting the agent user.
+
+### 1Password fields (prod, `vps` vault, item `clickstack`)
+
+Create these **by hand** first — the VPS service account has no write
+permission to 1Password:
+
+| Field | Value |
+|-|-|
+| `AGENT_EMAIL` | `<agent-email, e.g. hyperdx-agent@jkrumm.com>` |
+| `AGENT_PASSWORD` | 12-72 chars, upper + lower + digit + special (HyperDX's password policy) |
+| `AGENT_ACCESS_KEY` | a uuid v4, lowercase |
+
+### Setup / bootstrap targets
+
+| Target | Env | What it does |
+|-|-|-|
+| `make hyperdx-agent-setup` | prod | Idempotent. Invites (if missing) `AGENT_EMAIL` via the team-setup-token flow, then forces its `accessKey` to `AGENT_ACCESS_KEY`. Ends with an MCP `initialize` smoke test. |
+| `make hyperdx-dev-bootstrap` | dev | Idempotent. Ensures `~/.config/hyperdx/local.env` exists (generates `dev@hyperdx.test` + a policy-compliant password if missing), registers the first Mongo user if none exists, refreshes `HYPERDX_LOCAL_ACCESS_KEY` from Mongo. Same MCP smoke test against `http://localhost:7707`. |
+
+Neither script ever prints a secret value — `hyperdx-agent-setup.sh` prints
+`user ok` / `accessKey ok`; the dev script prints the same plus a
+"generated"/"registered" line only the first time it runs.
+
+### Dashboards as code
+
+`make hyperdx-export ENV=<dev|prod>` and `make hyperdx-apply ENV=<dev|prod>`
+wrap `scripts/hyperdx-sync.sh` over the REST v2 dashboards endpoint. Dashboards
+live at `observability/dashboards/*.json` — see `observability/README.md` for
+the full loop. In short: `export` pulls every dashboard down (ids/timestamps
+stripped so files are env-portable), `apply` validates
+(`POST /dashboards/validate`) then upserts **by dashboard name** (`PUT` if a
+same-named dashboard exists in the target env, else `POST`).
+
+### Deep-linking to a dashboard
+
+`https://hyperdx.${DOMAIN}/dashboards/<id>?from=<epoch-ms>&to=<epoch-ms>&kiosk=true`
+— `kiosk=true` hides the HyperDX chrome (useful when embedding a screenshot or
+sharing a fixed time window). `<id>` comes from a dashboard's REST v2 `id`
+field (`GET /api/api/v2/dashboards`).
+
 ## Deploy regression to know about
 
 **`make argo-up` was a foot-gun** — `${IMAGE_TAG:-...:latest}` fell back to
