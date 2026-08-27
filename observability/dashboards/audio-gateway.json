@@ -17,6 +17,11 @@
     },
     {
       "collapsed": false,
+      "id": "cost",
+      "title": "Cost & callers (estimated from provider list prices; cost_source=none means unpriced)"
+    },
+    {
+      "collapsed": false,
       "id": "stt",
       "title": "STT \u2014 latency by model, fallbacks, model overrides"
     },
@@ -67,7 +72,7 @@
       "h": 4,
       "id": "6a8ff05a09140756bb266fd8",
       "name": "Requests (speech + transcription, count in range)",
-      "w": 5,
+      "w": 4,
       "x": 0,
       "y": 0
     },
@@ -115,8 +120,8 @@
       "h": 4,
       "id": "6a8ff05a09140756bb266fd9",
       "name": "Error rate (%)",
-      "w": 5,
-      "x": 5,
+      "w": 4,
+      "x": 4,
       "y": 0
     },
     {
@@ -157,8 +162,8 @@
       "h": 4,
       "id": "6a8ff05a09140756bb266fda",
       "name": "TTS p95 latency (audio.speech)",
-      "w": 5,
-      "x": 10,
+      "w": 4,
+      "x": 8,
       "y": 0
     },
     {
@@ -199,8 +204,8 @@
       "h": 4,
       "id": "6a8ff05a09140756bb266fdb",
       "name": "STT p95 latency (audio.transcription)",
-      "w": 5,
-      "x": 15,
+      "w": 4,
+      "x": 12,
       "y": 0
     },
     {
@@ -239,7 +244,7 @@
       "id": "6a8fffab09140756bb26a366",
       "name": "STT fallbacks (count, retried on whisper)",
       "w": 4,
-      "x": 20,
+      "x": 16,
       "y": 0
     },
     {
@@ -324,12 +329,12 @@
           "whereTemplate": "ServiceName = 'audio-gateway' AND SpanAttributes['audio.model'] = '{{Model}}'"
         },
         "source": "Traces",
-        "sqlTemplate": "SELECT concat(SpanAttributes['audio.lane'], '/', SpanAttributes['audio.mode']) AS Profile, SpanAttributes['audio.model'] AS Model, count() AS Requests, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms, round(quantile(0.95)(Duration / 1e9 / nullIf(toFloat64OrZero(SpanAttributes['audio.audio_seconds']), 0)), 2) AS p95_rtf, round(median(toFloat64OrZero(SpanAttributes['audio.input_chars']))) AS med_chars, round(median(toFloat64OrZero(SpanAttributes['audio.audio_seconds'])), 1) AS med_audio_s, round(sum(toFloat64OrZero(SpanAttributes['audio.input_chars'])) / nullIf(sum(toFloat64OrZero(SpanAttributes['audio.audio_seconds'])), 0), 1) AS chars_per_audio_s, round(100 * countIf(toFloat64OrZero(SpanAttributes['audio.chunks']) > 1) / count()) AS multi_chunk_pct FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.speech' AND $__filters GROUP BY Profile, Model ORDER BY Requests DESC LIMIT 20"
+        "sqlTemplate": "SELECT concat(SpanAttributes['audio.lane'], '/', SpanAttributes['audio.mode']) AS Profile, SpanAttributes['audio.model'] AS Model, count() AS Requests, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms, round(quantile(0.95)(Duration / 1e9 / nullIf(toFloat64OrZero(SpanAttributes['audio.audio_seconds']), 0)), 2) AS p95_rtf, round(median(toFloat64OrZero(SpanAttributes['audio.input_chars']))) AS med_chars, round(median(toFloat64OrZero(SpanAttributes['audio.audio_seconds'])), 1) AS med_audio_s, round(sum(toFloat64OrZero(SpanAttributes['audio.input_chars'])) / nullIf(sum(toFloat64OrZero(SpanAttributes['audio.audio_seconds'])), 0), 1) AS chars_per_audio_s, round(100 * countIf(toFloat64OrZero(SpanAttributes['audio.chunks']) > 1) / count()) AS multi_chunk_pct, round(sum(toFloat64OrZero(SpanAttributes['audio.cost_usd'])), 4) AS cost_usd, round(sum(toFloat64OrZero(SpanAttributes['audio.cost_usd'])) / nullIf(sumIf(toFloat64OrZero(SpanAttributes['audio.audio_seconds']), SpanAttributes['audio.cost_source'] = 'estimated'), 0), 5) AS usd_per_audio_s FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.speech' AND $__filters GROUP BY Profile, Model ORDER BY Requests DESC LIMIT 20"
       },
       "containerId": "tts",
       "h": 5,
       "id": "6a8fffab09140756bb26a369",
-      "name": "TTS profiles \u2014 per lane/mode/model: requests, wall p50/p95 (ms), p95 real-time factor (compute s per audio s), chars, audio s, multi-chunk share \u2014 click a row to search its spans",
+      "name": "TTS profiles \u2014 per lane/mode/model: requests, wall p50/p95 (ms), p95 real-time factor (compute s per audio s), chars, audio s, multi-chunk share, USD, USD per audio s \u2014 click a row to search its spans",
       "w": 24,
       "x": 0,
       "y": 10
@@ -514,7 +519,7 @@
       "name": "STT latency p50 / p95 by served model",
       "w": 12,
       "x": 0,
-      "y": 26
+      "y": 37
     },
     {
       "config": {
@@ -562,7 +567,7 @@
       "name": "STT fallback rate (%)",
       "w": 6,
       "x": 12,
-      "y": 26
+      "y": 37
     },
     {
       "config": {
@@ -598,7 +603,7 @@
       "name": "STT model overrides (count, requested \u2260 served)",
       "w": 6,
       "x": 18,
-      "y": 26
+      "y": 37
     },
     {
       "config": {
@@ -623,7 +628,7 @@
       "name": "STT by served model \u2014 requests, p50/p95 (ms), fallbacks, overrides, errors \u2014 click a row to search",
       "w": 12,
       "x": 12,
-      "y": 29
+      "y": 40
     },
     {
       "config": {
@@ -648,7 +653,7 @@
       "name": "Failed requests by lane (count per interval, 4xx/5xx or span error)",
       "w": 12,
       "x": 0,
-      "y": 33
+      "y": 44
     },
     {
       "config": {
@@ -682,9 +687,9 @@
       "h": 3,
       "id": "6a8fffab09140756bb26a373",
       "name": "Warn logs (count \u2014 model overrides, STT fallbacks)",
-      "w": 6,
+      "w": 4,
       "x": 12,
-      "y": 33
+      "y": 44
     },
     {
       "config": {
@@ -718,9 +723,9 @@
       "h": 3,
       "id": "6a8fffab09140756bb26a374",
       "name": "Error logs (count \u2014 upstream failures)",
-      "w": 6,
-      "x": 18,
-      "y": 33
+      "w": 4,
+      "x": 16,
+      "y": 44
     },
     {
       "config": {
@@ -736,7 +741,7 @@
       "name": "Recent warn + error logs",
       "w": 12,
       "x": 12,
-      "y": 36
+      "y": 47
     },
     {
       "config": {
@@ -753,7 +758,7 @@
           "whereTemplate": "TraceId = '{{TraceId}}'"
         },
         "source": "Traces",
-        "sqlTemplate": "SELECT Timestamp, SpanName AS Operation, StatusCode AS Status, round(Duration / 1e6) AS ms, SpanAttributes['audio.lane'] AS Lane, SpanAttributes['audio.mode'] AS Mode, SpanAttributes['audio.model'] AS Model, toFloat64OrZero(SpanAttributes['audio.input_chars']) AS Chars, round(toFloat64OrZero(SpanAttributes['audio.audio_seconds']), 1) AS AudioSec, toFloat64OrZero(SpanAttributes['audio.chunks']) AS Chunks, SpanAttributes['audio.caller'] AS Caller, TraceId FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanKind = 'Server' AND $__filters ORDER BY Timestamp DESC LIMIT 25"
+        "sqlTemplate": "SELECT Timestamp, SpanName AS Operation, StatusCode AS Status, round(Duration / 1e6) AS ms, SpanAttributes['audio.lane'] AS Lane, SpanAttributes['audio.mode'] AS Mode, SpanAttributes['audio.model'] AS Model, toFloat64OrZero(SpanAttributes['audio.input_chars']) AS Chars, round(toFloat64OrZero(SpanAttributes['audio.audio_seconds']), 1) AS AudioSec, toFloat64OrZero(SpanAttributes['audio.chunks']) AS Chunks, SpanAttributes['audio.caller'] AS Caller, round(toFloat64OrZero(SpanAttributes['audio.cost_usd']), 4) AS USD, TraceId FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanKind = 'Server' AND $__filters ORDER BY Timestamp DESC LIMIT 25"
       },
       "containerId": "recent",
       "h": 8,
@@ -761,7 +766,219 @@
       "name": "Recent requests \u2014 click a row to open its spans",
       "w": 24,
       "x": 0,
-      "y": 39
+      "y": 50
+    },
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "fan-out",
+            "operator": "gte",
+            "value": 4
+          },
+          {
+            "color": "chart-error",
+            "label": "saturated",
+            "operator": "gte",
+            "value": 8
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "In-flight peak",
+            "valueExpression": "toFloat64OrZero(SpanAttributes['audio.inflight'])",
+            "where": "ServiceName = 'audio-gateway' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "now",
+      "h": 4,
+      "id": "6a90026209140756bb26b30f",
+      "name": "In-flight peak (max concurrent requests)",
+      "w": 4,
+      "x": 20,
+      "y": 0
+    },
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-blue",
+        "displayType": "number",
+        "numberFormat": {
+          "currencySymbol": "$",
+          "mantissa": 4,
+          "output": "currency"
+        },
+        "select": [
+          {
+            "aggFn": "sum",
+            "alias": "Cost",
+            "valueExpression": "toFloat64OrZero(SpanAttributes['audio.cost_usd'])",
+            "where": "ServiceName = 'audio-gateway' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "cost",
+      "h": 3,
+      "id": "6a90026209140756bb26b310",
+      "name": "Cost in range (USD, estimated)",
+      "w": 6,
+      "x": 0,
+      "y": 26
+    },
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-blue",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "sum",
+            "alias": "Chars billed",
+            "valueExpression": "toFloat64OrZero(SpanAttributes['audio.chars_billed'])",
+            "where": "ServiceName = 'audio-gateway' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "cost",
+      "h": 3,
+      "id": "6a90026209140756bb26b311",
+      "name": "Chars billed (ElevenLabs, sum)",
+      "w": 6,
+      "x": 0,
+      "y": 29
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['audio.caller']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "ServiceName = 'audio-gateway' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "cost",
+      "h": 6,
+      "id": "6a90026209140756bb26b312",
+      "name": "Requests by caller (count per interval)",
+      "w": 18,
+      "x": 6,
+      "y": 26
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "onClick": {
+          "target": {
+            "mode": "id",
+            "source": "Traces"
+          },
+          "type": "search",
+          "whereLanguage": "sql",
+          "whereTemplate": "ServiceName = 'audio-gateway' AND SpanAttributes['audio.caller'] = '{{Caller}}'"
+        },
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['audio.caller'] AS Caller, count() AS Requests, round(sum(toFloat64OrZero(SpanAttributes['audio.cost_usd'])), 4) AS cost_usd, sum(toFloat64OrZero(SpanAttributes['audio.chars_billed'])) AS chars_billed, round(sum(toFloat64OrZero(SpanAttributes['audio.audio_seconds'])), 1) AS audio_s, round(quantile(0.95)(Duration) / 1e6) AS p95_ms, round(100 * countIf(SpanAttributes['audio.cost_source'] != 'estimated') / count()) AS unpriced_pct FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanKind = 'Server' AND $__filters GROUP BY Caller ORDER BY Requests DESC LIMIT 20"
+      },
+      "containerId": "cost",
+      "h": 5,
+      "id": "6a90026209140756bb26b313",
+      "name": "Cost by caller \u2014 requests, USD, chars billed, audio s, p95 (ms), unpriced % (no cost attribute) \u2014 click a row to search",
+      "w": 12,
+      "x": 0,
+      "y": 32
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT concat(SpanAttributes['audio.lane'], '/', SpanAttributes['audio.model']) AS LaneModel, count() AS Requests, round(sum(toFloat64OrZero(SpanAttributes['audio.cost_usd'])), 4) AS cost_usd, round(sum(toFloat64OrZero(SpanAttributes['audio.cost_usd'])) / nullIf(sumIf(toFloat64OrZero(SpanAttributes['audio.audio_seconds']), SpanAttributes['audio.cost_source'] = 'estimated'), 0), 5) AS usd_per_audio_s, round(1000 * sum(toFloat64OrZero(SpanAttributes['audio.cost_usd'])) / nullIf(sumIf(toFloat64OrZero(SpanAttributes['audio.input_chars']), SpanAttributes['audio.cost_source'] = 'estimated'), 0), 4) AS usd_per_1k_chars FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.speech' AND $__filters GROUP BY LaneModel ORDER BY Requests DESC LIMIT 20"
+      },
+      "containerId": "cost",
+      "h": 5,
+      "id": "6a90026209140756bb26b314",
+      "name": "Cost by lane/model (TTS) \u2014 requests, USD, USD per audio second, USD per 1k chars (priced requests only in the denominators)",
+      "w": 12,
+      "x": 12,
+      "y": 32
+    },
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "degraded",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "sum",
+            "alias": "Fallbacks+retries",
+            "valueExpression": "toFloat64OrZero(SpanAttributes['audio.retries']) + if(SpanAttributes['audio.fallback'] = 'true', 1, 0)",
+            "where": "ServiceName = 'audio-gateway' AND SpanName = 'audio.speech'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "errors",
+      "h": 3,
+      "id": "6a90026209140756bb26b315",
+      "name": "TTS fallbacks + retries (count)",
+      "w": 4,
+      "x": 20,
+      "y": 44
     }
   ]
 }
