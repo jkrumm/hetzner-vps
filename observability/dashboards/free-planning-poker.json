@@ -1,0 +1,423 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "health",
+      "title": "Health"
+    },
+    {
+      "collapsed": false,
+      "id": "server",
+      "title": "fpp-server (WebSocket + HTTP)"
+    },
+    {
+      "collapsed": false,
+      "id": "analytics",
+      "title": "fpp-analytics (FastAPI)"
+    },
+    {
+      "collapsed": false,
+      "id": "browser",
+      "title": "Browser (free-planning-poker)"
+    },
+    {
+      "collapsed": false,
+      "id": "rooms",
+      "title": "Rooms & logs"
+    }
+  ],
+  "filters": [],
+  "name": "Free Planning Poker",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "agent"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-blue",
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "numberFormat": {
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND ((SpanKind = 'Server' AND SpanName != 'Root') OR startsWith(SpanName, 'ws.'))",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0e009140756bb26709f",
+      "name": "Server requests + WS actions",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "> 0.5%",
+            "operator": "gte",
+            "value": 0.005
+          },
+          {
+            "color": "chart-error",
+            "label": "> 2%",
+            "operator": "gte",
+            "value": 0.02
+          }
+        ],
+        "displayType": "number",
+        "formulas": [
+          {
+            "alias": "Error rate %",
+            "expression": "A / B",
+            "numberFormat": {
+              "mantissa": 2,
+              "output": "percent"
+            }
+          }
+        ],
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND ((SpanKind = 'Server' AND SpanName != 'Root') OR startsWith(SpanName, 'ws.')) AND (StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND ((SpanKind = 'Server' AND SpanName != 'Root') OR startsWith(SpanName, 'ws.'))",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0e009140756bb2670a0",
+      "name": "Server error rate (%)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "> 100ms",
+            "operator": "gte",
+            "value": 100000000
+          },
+          {
+            "color": "chart-error",
+            "label": "> 500ms",
+            "operator": "gte",
+            "value": 500000000
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "factor": 1e-09,
+          "output": "duration"
+        },
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'fpp-server' AND ((SpanKind = 'Server' AND SpanName != 'Root') OR startsWith(SpanName, 'ws.'))",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0e009140756bb2670a1",
+      "name": "Server p95 latency",
+      "w": 6,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "some",
+            "operator": "gte",
+            "value": 1
+          },
+          {
+            "color": "chart-error",
+            "label": "many",
+            "operator": "gte",
+            "value": 25
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Browser errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'free-planning-poker' AND (StatusCode = 'Error' OR SpanName = 'console.error')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0e009140756bb2670a2",
+      "name": "Browser errors",
+      "w": 6,
+      "x": 18,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "WS connections",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND SpanName = 'GET /ws'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Votes",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND SpanName = 'ws.estimate'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Flips",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND SpanName = 'ws.flip'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "server",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a3",
+      "name": "Activity: WS connections, votes, flips",
+      "w": 12,
+      "x": 0,
+      "y": 3
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p50",
+            "level": 0.5,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'fpp-server' AND ((SpanKind = 'Server' AND SpanName != 'Root') OR startsWith(SpanName, 'ws.'))",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'fpp-server' AND ((SpanKind = 'Server' AND SpanName != 'Root') OR startsWith(SpanName, 'ws.'))",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "server",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a4",
+      "name": "Server latency p50 / p95",
+      "w": 12,
+      "x": 12,
+      "y": 3
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "table",
+        "groupBy": "SpanName",
+        "groupByColumnsOnLeft": true,
+        "onClick": {
+          "target": {
+            "id": "69cd0b07911482e6218c0efb",
+            "mode": "id"
+          },
+          "type": "search",
+          "whereLanguage": "sql",
+          "whereTemplate": "ServiceName = 'fpp-analytics' AND SpanName = '{{SpanName}}'"
+        },
+        "orderBy": "Requests DESC",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-analytics' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-analytics' AND SpanKind = 'Server' AND (StatusCode = 'Error' OR SpanAttributes['http.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'fpp-analytics' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "analytics",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a5",
+      "name": "fpp-analytics routes \u2014 requests, errors, p95 (bare GET/POST = unrouted scanner 404s)",
+      "w": 24,
+      "x": 0,
+      "y": 9
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanName",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'free-planning-poker' AND (StatusCode = 'Error' OR SpanName = 'console.error')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 8,
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "browser",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a6",
+      "name": "Browser errors by type",
+      "w": 12,
+      "x": 0,
+      "y": 15
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connectionId": "69cd0b07911482e6218c0ef5",
+        "displayType": "table",
+        "sourceId": "69cd0b07911482e6218c0efb",
+        "sqlTemplate": "SELECT replaceRegexpOne(path(SpanAttributes['location.href']), '^/room/[^/]+', '/room/:name') AS Page, count() AS Loads, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'free-planning-poker' AND SpanName = 'documentLoad' AND $__filters GROUP BY Page ORDER BY Loads DESC LIMIT 10"
+      },
+      "containerId": "browser",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a7",
+      "name": "Page load by page (documentLoad) \u2014 loads, p50/p95 ms",
+      "w": 12,
+      "x": 12,
+      "y": 15
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "LogAttributes['event.name']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Events",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-server' AND LogAttributes['event.name'] IN ('room.created', 'room.joined', 'room.left', 'room.closed', 'round.flipped')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 5,
+        "sourceId": "69cd0b07911482e6218c0ef9"
+      },
+      "containerId": "rooms",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a8",
+      "name": "Room lifecycle events",
+      "w": 12,
+      "x": 0,
+      "y": 21
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, ServiceName, SeverityText, Body",
+        "sourceId": "69cd0b07911482e6218c0ef9",
+        "where": "ServiceName IN ('fpp-server', 'fpp-analytics') AND SeverityText IN ('error', 'fatal')",
+        "whereLanguage": "sql"
+      },
+      "containerId": "rooms",
+      "h": 6,
+      "id": "6a8ff0e009140756bb2670a9",
+      "name": "Recent error logs (fpp-server, fpp-analytics)",
+      "w": 12,
+      "x": 12,
+      "y": 21
+    }
+  ]
+}

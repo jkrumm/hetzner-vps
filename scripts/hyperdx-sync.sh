@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
-# HyperDX dashboards-as-code — REST v2, both envs.
+# HyperDX dashboards + alerts as code — REST v2, both envs.
 #
-# Mongo (the dashboard store) has no backup — observability/dashboards/*.json
-# IS the backup. `export` pulls every dashboard down; `apply` validates and
-# upserts (by NAME — HyperDX dashboard ids are per-env Mongo ObjectIds and
-# don't round-trip) from those files back into an env.
+# Mongo (the dashboard/alert store) has no backup — observability/dashboards/
+# and observability/alerts/ ARE the backup. `export` pulls every dashboard and
+# alert down; `apply` validates (dashboards only — alerts have no /validate
+# endpoint) and upserts (by NAME — HyperDX ids are per-env Mongo ObjectIds and
+# don't round-trip) from those files back into an env, dashboards first, then
+# alerts.
 #
 # Usage:
 #   scripts/hyperdx-sync.sh export <dev|prod>
 #   scripts/hyperdx-sync.sh apply  <dev|prod> [file ...]   # default: every
 #                                                            # *.json in
 #                                                            # observability/dashboards/
+#                                                            # plus every
+#                                                            # *.json in
+#                                                            # observability/alerts/
 #
 # Env/key resolution:
 #   dev  → ~/.config/hyperdx/local.env (HYPERDX_LOCAL_ACCESS_KEY), base
@@ -20,12 +25,21 @@
 #          op://vps/clickstack/AGENT_ACCESS_KEY` if secrets-run exists, else
 #          `op read op://vps/clickstack/AGENT_ACCESS_KEY`. Base URL follows
 #          the same ladder via $HYPERDX_PROD_BASE_URL / op://vps/config/DOMAIN.
+#
+# Alert files reference env-specific ids by NAME instead: `dashboardId` +
+# `tileId` become `dashboard`/`tile` (tile title, i.e. the tile's own `name`),
+# `savedSearchId` becomes `savedSearch`, and `channel.webhookId` becomes
+# `channel.webhook`. `apply` resolves those names back into ids via
+# GET /dashboards, /saved-searches, /webhooks and fails with a clear message
+# naming the unresolved reference. Run `make hyperdx-webhook-setup` before
+# applying any alert that references a webhook by name.
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DASH_DIR="${REPO_ROOT}/observability/dashboards"
+ALERT_DIR="${REPO_ROOT}/observability/alerts"
 
 usage() {
   echo "Usage: $0 export <dev|prod>" >&2
@@ -72,16 +86,20 @@ resolve_env() {
 cmd_export() {
   local env="$1"
   resolve_env "$env"
-  mkdir -p "$DASH_DIR"
+  mkdir -p "$DASH_DIR" "$ALERT_DIR"
 
-  local resp
-  resp=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
+  local dash_resp
+  dash_resp=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
 
-  HDX_RESP="$resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
+  HDX_RESP="$dash_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
 import json
 import os
 import re
 
+# Top-level only — server-owned fields on the dashboard document itself.
+# Nested ids (tiles[].id, tiles[].containerId, containers[].id, ...) are
+# structural, not server-assigned metadata, and the write schema requires
+# them back (e.g. containers[].id) — stripping them recursively broke apply.
 STRIP_KEYS = {"id", "_id", "createdAt", "updatedAt", "team"}
 
 
@@ -90,12 +108,8 @@ def slugify(name):
     return s or "dashboard"
 
 
-def strip(obj):
-    if isinstance(obj, dict):
-        return {k: strip(v) for k, v in obj.items() if k not in STRIP_KEYS}
-    if isinstance(obj, list):
-        return [strip(v) for v in obj]
-    return obj
+def strip(dash):
+    return {k: v for k, v in dash.items() if k not in STRIP_KEYS}
 
 
 resp = json.loads(os.environ["HDX_RESP"])
@@ -112,6 +126,81 @@ for dash in dashboards:
     count += 1
 print(f"exported {count} dashboard(s) to {out_dir}")
 PY
+
+  local search_resp webhook_resp alert_resp
+  search_resp=$(curl -fsS "${BASE}/api/api/v2/saved-searches" -H "Authorization: Bearer ${KEY}")
+  webhook_resp=$(curl -fsS "${BASE}/api/api/v2/webhooks" -H "Authorization: Bearer ${KEY}")
+  alert_resp=$(curl -fsS "${BASE}/api/api/v2/alerts" -H "Authorization: Bearer ${KEY}")
+
+  HDX_DASH="$dash_resp" HDX_SEARCH="$search_resp" HDX_WEBHOOK="$webhook_resp" \
+    HDX_ALERT="$alert_resp" HDX_DIR="$ALERT_DIR" python3 <<'PY'
+import json
+import os
+import re
+import sys
+
+ALERT_STRIP_KEYS = {"id", "state", "teamId", "silenced", "executionErrors", "createdAt", "updatedAt"}
+
+
+def slugify(name):
+    s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return s or "alert"
+
+
+dashboards = json.loads(os.environ["HDX_DASH"]).get("data", [])
+searches = json.loads(os.environ["HDX_SEARCH"]).get("data", [])
+webhooks = json.loads(os.environ["HDX_WEBHOOK"]).get("data", [])
+alerts = json.loads(os.environ["HDX_ALERT"]).get("data", [])
+out_dir = os.environ["HDX_DIR"]
+
+dash_by_id = {d["id"]: d for d in dashboards}
+search_name_by_id = {s["id"]: s.get("name") for s in searches}
+webhook_name_by_id = {w["id"]: w.get("name") for w in webhooks}
+
+count = 0
+for alert in alerts:
+    a = {k: v for k, v in alert.items() if k not in ALERT_STRIP_KEYS}
+
+    dashboard_id = a.pop("dashboardId", None)
+    tile_id = a.pop("tileId", None)
+    saved_search_id = a.pop("savedSearchId", None)
+
+    if dashboard_id:
+        dash = dash_by_id.get(dashboard_id)
+        if dash is None:
+            sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown dashboardId {dashboard_id}")
+        a["dashboard"] = dash.get("name")
+        if tile_id:
+            tile = next((t for t in dash.get("tiles", []) if t.get("id") == tile_id), None)
+            if tile is None:
+                sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown tileId {tile_id} on dashboard '{dash.get('name')}'")
+            a["tile"] = tile.get("name")
+
+    if saved_search_id:
+        name = search_name_by_id.get(saved_search_id)
+        if name is None:
+            sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown savedSearchId {saved_search_id}")
+        a["savedSearch"] = name
+
+    channel = a.get("channel")
+    if isinstance(channel, dict) and channel.get("type") == "webhook":
+        webhook_id = channel.get("webhookId")
+        name = webhook_name_by_id.get(webhook_id)
+        if name is None:
+            sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown webhookId {webhook_id}")
+        channel = {k: v for k, v in channel.items() if k != "webhookId"}
+        channel["webhook"] = name
+        a["channel"] = channel
+
+    slug_source = alert.get("name") or f"alert-{alert.get('id', 'unknown')}"
+    slug = slugify(slug_source)
+    path = os.path.join(out_dir, f"{slug}.json")
+    with open(path, "w") as f:
+        json.dump(a, f, indent=2, sort_keys=True)
+        f.write("\n")
+    count += 1
+print(f"exported {count} alert(s) to {out_dir}")
+PY
 }
 
 cmd_apply() {
@@ -125,39 +214,39 @@ cmd_apply() {
     files=("$DASH_DIR"/*.json)
     shopt -u nullglob
   fi
-  if [[ ${#files[@]} -eq 0 ]]; then
-    echo "no dashboard files to apply"
-    return 0
-  fi
-
-  local existing
-  existing=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
 
   local failed=0
-  for file in "${files[@]}"; do
-    echo "--> ${file}"
 
-    local validate_resp valid
-    validate_resp=$(curl -fsS -X POST "${BASE}/api/api/v2/dashboards/validate" \
-      -H "Authorization: Bearer ${KEY}" \
-      -H "Content-Type: application/json" \
-      --data-binary @"$file")
-    valid=$(python3 -c "import json,sys; print(json.load(sys.stdin)['valid'])" <<<"$validate_resp")
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo "no dashboard files to apply"
+  else
+    local existing
+    existing=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
 
-    if [[ "$valid" != "True" ]]; then
-      echo "  ✗ invalid:"
-      python3 -c "
+    for file in "${files[@]}"; do
+      echo "--> ${file}"
+
+      local validate_resp valid
+      validate_resp=$(curl -fsS -X POST "${BASE}/api/api/v2/dashboards/validate" \
+        -H "Authorization: Bearer ${KEY}" \
+        -H "Content-Type: application/json" \
+        --data-binary @"$file")
+      valid=$(python3 -c "import json,sys; print(json.load(sys.stdin)['valid'])" <<<"$validate_resp")
+
+      if [[ "$valid" != "True" ]]; then
+        echo "  ✗ invalid:"
+        python3 -c "
 import json, sys
 for e in json.load(sys.stdin)['errors']:
     print(f\"    {e['path']}: {e['message']}\")
 " <<<"$validate_resp"
-      failed=1
-      continue
-    fi
+        failed=1
+        continue
+      fi
 
-    local name existing_id
-    name=$(python3 -c "import json,sys; print(json.load(sys.stdin)['name'])" <"$file")
-    existing_id=$(HDX_NAME="$name" python3 -c "
+      local name existing_id
+      name=$(python3 -c "import json,sys; print(json.load(sys.stdin)['name'])" <"$file")
+      existing_id=$(HDX_NAME="$name" python3 -c "
 import json, os, sys
 name = os.environ['HDX_NAME']
 data = json.loads(sys.stdin.read()).get('data', [])
@@ -165,18 +254,129 @@ match = next((d for d in data if d.get('name') == name), None)
 print(match['id'] if match else '')
 " <<<"$existing")
 
+      if [[ -n "$existing_id" ]]; then
+        curl -fsS -X PUT "${BASE}/api/api/v2/dashboards/${existing_id}" \
+          -H "Authorization: Bearer ${KEY}" \
+          -H "Content-Type: application/json" \
+          --data-binary @"$file" >/dev/null
+        echo "  ✓ updated ${name} (${existing_id})"
+      else
+        curl -fsS -X POST "${BASE}/api/api/v2/dashboards" \
+          -H "Authorization: Bearer ${KEY}" \
+          -H "Content-Type: application/json" \
+          --data-binary @"$file" >/dev/null
+        echo "  ✓ created ${name}"
+      fi
+    done
+  fi
+
+  apply_alerts || failed=1
+
+  [[ "$failed" -eq 0 ]]
+}
+
+apply_alerts() {
+  mkdir -p "$ALERT_DIR"
+  shopt -s nullglob
+  local files=("$ALERT_DIR"/*.json)
+  shopt -u nullglob
+
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo "no alert files to apply"
+    return 0
+  fi
+
+  local dash_resp search_resp webhook_resp alert_resp
+  dash_resp=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
+  search_resp=$(curl -fsS "${BASE}/api/api/v2/saved-searches" -H "Authorization: Bearer ${KEY}")
+  webhook_resp=$(curl -fsS "${BASE}/api/api/v2/webhooks" -H "Authorization: Bearer ${KEY}")
+  alert_resp=$(curl -fsS "${BASE}/api/api/v2/alerts" -H "Authorization: Bearer ${KEY}")
+
+  local failed=0
+  for file in "${files[@]}"; do
+    echo "--> ${file}"
+
+    local body
+    if ! body=$(HDX_DASH="$dash_resp" HDX_SEARCH="$search_resp" HDX_WEBHOOK="$webhook_resp" HDX_FILE="$file" python3 <<'PY'
+import json
+import os
+import sys
+
+dashboards = json.loads(os.environ["HDX_DASH"]).get("data", [])
+searches = json.loads(os.environ["HDX_SEARCH"]).get("data", [])
+webhooks = json.loads(os.environ["HDX_WEBHOOK"]).get("data", [])
+
+dash_by_name = {d.get("name"): d for d in dashboards}
+search_id_by_name = {s.get("name"): s.get("id") for s in searches}
+webhook_id_by_name = {w.get("name"): w.get("id") for w in webhooks}
+
+with open(os.environ["HDX_FILE"]) as f:
+    alert = json.load(f)
+
+dashboard_name = alert.pop("dashboard", None)
+tile_title = alert.pop("tile", None)
+saved_search_name = alert.pop("savedSearch", None)
+
+if dashboard_name is not None:
+    dash = dash_by_name.get(dashboard_name)
+    if dash is None:
+        sys.exit(f"ERROR: unresolved dashboard reference '{dashboard_name}'")
+    alert["dashboardId"] = dash["id"]
+    if tile_title is not None:
+        tile = next(
+            (t for t in dash.get("tiles", []) if t.get("name") == tile_title),
+            None,
+        )
+        if tile is None:
+            sys.exit(f"ERROR: unresolved tile reference '{tile_title}' on dashboard '{dashboard_name}'")
+        alert["tileId"] = tile["id"]
+
+if saved_search_name is not None:
+    search_id = search_id_by_name.get(saved_search_name)
+    if search_id is None:
+        sys.exit(f"ERROR: unresolved savedSearch reference '{saved_search_name}'")
+    alert["savedSearchId"] = search_id
+
+channel = alert.get("channel")
+if isinstance(channel, dict) and "webhook" in channel:
+    webhook_name = channel.pop("webhook")
+    webhook_id = webhook_id_by_name.get(webhook_name)
+    if webhook_id is None:
+        sys.exit(f"ERROR: unresolved webhook reference '{webhook_name}'")
+    channel["webhookId"] = webhook_id
+
+print(json.dumps(alert))
+PY
+    ); then
+      echo "  ✗ ${body}"
+      failed=1
+      continue
+    fi
+
+    local name existing_id
+    name=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('name') or '')" <<<"$body")
+    existing_id=$(HDX_NAME="$name" python3 -c "
+import json, os, sys
+name = os.environ['HDX_NAME']
+data = json.loads(sys.stdin.read()).get('data', [])
+match = next((a for a in data if (a.get('name') or '') == name), None)
+print(match['id'] if match else '')
+" <<<"$alert_resp")
+
     if [[ -n "$existing_id" ]]; then
-      curl -fsS -X PUT "${BASE}/api/api/v2/dashboards/${existing_id}" \
+      curl -fsS -X PUT "${BASE}/api/api/v2/alerts/${existing_id}" \
         -H "Authorization: Bearer ${KEY}" \
         -H "Content-Type: application/json" \
-        --data-binary @"$file" >/dev/null
+        --data-binary "$body" >/dev/null
       echo "  ✓ updated ${name} (${existing_id})"
     else
-      curl -fsS -X POST "${BASE}/api/api/v2/dashboards" \
+      local resp new_id
+      resp=$(curl -fsS -X POST "${BASE}/api/api/v2/alerts" \
         -H "Authorization: Bearer ${KEY}" \
         -H "Content-Type: application/json" \
-        --data-binary @"$file" >/dev/null
-      echo "  ✓ created ${name}"
+        --data-binary "$body")
+      new_id=$(python3 -c "import json,sys; print(json.load(sys.stdin)['data']['id'])" <<<"$resp")
+      echo "  ✓ created ${name} (${new_id})"
     fi
   done
 

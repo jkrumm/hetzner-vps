@@ -1,0 +1,488 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "now",
+      "title": "Health now (edge = Traefik server spans, excl. otel ingest)"
+    },
+    {
+      "collapsed": false,
+      "id": "services",
+      "title": "Services (app server spans)"
+    },
+    {
+      "collapsed": false,
+      "id": "edge",
+      "title": "Edge (Traefik, per host)"
+    },
+    {
+      "collapsed": false,
+      "id": "errors",
+      "title": "Errors & deploys (logs)"
+    }
+  ],
+  "filters": [],
+  "name": "VPS \u2014 Overview",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "agent"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-blue",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Edge requests",
+            "valueExpression": "",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "now",
+      "h": 4,
+      "id": "6a8ff04209140756bb266f91",
+      "name": "Edge requests (count in range)",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": ">1%",
+            "operator": "gte",
+            "value": 0.01
+          },
+          {
+            "color": "chart-error",
+            "label": ">5%",
+            "operator": "gte",
+            "value": 0.05
+          }
+        ],
+        "displayType": "number",
+        "formulas": [
+          {
+            "alias": "Edge 5xx rate",
+            "expression": "A / B",
+            "numberFormat": {
+              "mantissa": 2,
+              "output": "percent"
+            }
+          }
+        ],
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "5xx",
+            "valueExpression": "",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND StatusCode = 'Error'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Total",
+            "valueExpression": "",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "now",
+      "h": 4,
+      "id": "6a8ff04209140756bb266f92",
+      "name": "Edge 5xx rate (%)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": ">500ms",
+            "operator": "gte",
+            "value": 500000000
+          },
+          {
+            "color": "chart-error",
+            "label": ">2s",
+            "operator": "gte",
+            "value": 2000000000
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "Edge p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-06,
+              "mantissa": 0,
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "now",
+      "h": 4,
+      "id": "6a8ff04209140756bb266f93",
+      "name": "Edge p95 latency (ms)",
+      "w": 6,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "some",
+            "operator": "gte",
+            "value": 1
+          },
+          {
+            "color": "chart-error",
+            "label": "many",
+            "operator": "gte",
+            "value": 10
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Error logs",
+            "valueExpression": "",
+            "where": "SeverityNumber >= 17",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0ef9"
+      },
+      "containerId": "now",
+      "h": 4,
+      "id": "6a8ff04209140756bb266f94",
+      "name": "Error logs (severity >= error, count in range)",
+      "w": 6,
+      "x": 18,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "ServiceName",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "services",
+      "h": 6,
+      "id": "6a8ff04209140756bb266f95",
+      "name": "Requests by service (count per interval)",
+      "w": 8,
+      "x": 0,
+      "y": 4
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "formulas": [
+          {
+            "alias": "Error rate",
+            "expression": "A / B",
+            "numberFormat": {
+              "mantissa": 2,
+              "output": "percent"
+            }
+          }
+        ],
+        "groupBy": "ServiceName",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik' AND StatusCode = 'Error'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Total",
+            "valueExpression": "",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "showOperandSeries": false,
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "services",
+      "h": 6,
+      "id": "6a8ff04209140756bb266f96",
+      "name": "Error rate by service (%)",
+      "w": 8,
+      "x": 8,
+      "y": 4
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ServiceName",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-06,
+              "mantissa": 0,
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "Duration",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "services",
+      "h": 6,
+      "id": "6a8ff04209140756bb266f97",
+      "name": "p95 latency by service (ms)",
+      "w": 8,
+      "x": 16,
+      "y": 4
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "table",
+        "groupBy": "ServiceName",
+        "groupByColumnsOnLeft": true,
+        "onClick": {
+          "filters": [
+            {
+              "expression": "ServiceName",
+              "kind": "expressionTemplate",
+              "template": "{{ServiceName}}"
+            }
+          ],
+          "target": {
+            "id": "69cd0b07911482e6218c0efb",
+            "mode": "id"
+          },
+          "type": "search",
+          "whereLanguage": "sql"
+        },
+        "orderBy": "Requests DESC",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik' AND StatusCode = 'Error'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p50 (ms)",
+            "level": 0.5,
+            "numberFormat": {
+              "factor": 1e-06,
+              "mantissa": 0,
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "Duration",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p95 (ms)",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-06,
+              "mantissa": 0,
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "Duration",
+            "where": "SpanKind = 'Server' AND ServiceName != 'traefik'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "services",
+      "h": 6,
+      "id": "6a8ff04209140756bb266f98",
+      "name": "Services: requests / errors / p50 / p95 (click a row to search its spans)",
+      "w": 24,
+      "x": 0,
+      "y": 10
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "concat(substring(SpanAttributes['http.response.status_code'], 1, 1), 'xx')",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Responses",
+            "valueExpression": "",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "edge",
+      "h": 6,
+      "id": "6a8ff04209140756bb266f99",
+      "name": "Edge responses by status class (count per interval)",
+      "w": 12,
+      "x": 0,
+      "y": 16
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connectionId": "69cd0b07911482e6218c0ef5",
+        "displayType": "table",
+        "onClick": {
+          "filters": [
+            {
+              "expression": "SpanAttributes['server.address']",
+              "kind": "expressionTemplate",
+              "template": "{{Host}}"
+            }
+          ],
+          "target": {
+            "id": "69cd0b07911482e6218c0efb",
+            "mode": "id"
+          },
+          "type": "search",
+          "whereLanguage": "sql"
+        },
+        "sourceId": "69cd0b07911482e6218c0efb",
+        "sqlTemplate": "SELECT SpanAttributes['server.address'] AS Host, count() AS Requests, countIf(StatusCode = 'Error') AS `5xx`, round(quantile(0.95)(Duration) / 1e6) AS `p95 (ms)` FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND $__filters GROUP BY Host ORDER BY Requests DESC LIMIT 20"
+      },
+      "containerId": "edge",
+      "h": 6,
+      "id": "6a8ff04209140756bb266f9a",
+      "name": "Edge hosts: requests / 5xx / p95 (ms) (click a row to search that host)",
+      "w": 12,
+      "x": 12,
+      "y": 16
+    },
+    {
+      "config": {
+        "displayType": "event_patterns",
+        "select": "",
+        "sourceId": "69cd0b07911482e6218c0ef9",
+        "where": "SeverityNumber >= 17",
+        "whereLanguage": "sql"
+      },
+      "containerId": "errors",
+      "h": 7,
+      "id": "6a8ff04209140756bb266f9b",
+      "name": "Top error log patterns (severity >= error)",
+      "w": 12,
+      "x": 0,
+      "y": 22
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, Body",
+        "sourceId": "69cd0b07911482e6218c0ef9",
+        "where": "ServiceName = 'rollhook' AND Body LIKE 'Deploy:%'",
+        "whereLanguage": "sql"
+      },
+      "containerId": "errors",
+      "h": 7,
+      "id": "6a8ff04209140756bb266f9c",
+      "name": "Recent deploys (RollHook)",
+      "w": 12,
+      "x": 12,
+      "y": 22
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, ServiceName, SeverityText, Body",
+        "sourceId": "69cd0b07911482e6218c0ef9",
+        "where": "SeverityNumber >= 17",
+        "whereLanguage": "sql"
+      },
+      "containerId": "errors",
+      "h": 7,
+      "id": "6a8ff04209140756bb266f9d",
+      "name": "Recent error logs",
+      "w": 24,
+      "x": 0,
+      "y": 29
+    }
+  ]
+}

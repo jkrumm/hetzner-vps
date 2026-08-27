@@ -57,7 +57,7 @@ endif
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-export hyperdx-apply clickstack-restart
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-restart
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -465,12 +465,19 @@ hyperdx-agent-setup: require-prod
 hyperdx-dev-bootstrap: require-dev
 	./scripts/hyperdx-dev-bootstrap.sh
 
-## Dashboards-as-code — export every dashboard from ENV to observability/dashboards/*.json.
+## HyperDX Slack webhook — idempotent, prod-only. Ensures webhook "Slack #alerts"
+## exists/matches op://common/slack/WEBHOOK_ALERTS. Run before hyperdx-apply.
+hyperdx-webhook-setup: require-prod
+	./scripts/hyperdx-webhook-setup.sh
+
+## Dashboards + alerts-as-code — export every dashboard and alert from ENV to
+## observability/dashboards/*.json and observability/alerts/*.json.
 hyperdx-export:
 	./scripts/hyperdx-sync.sh export $(ENV)
 
-## Dashboards-as-code — validate + upsert (by name) dashboards from
-## observability/dashboards/ (or FILES=...) into ENV.
+## Dashboards + alerts-as-code — validate + upsert (by name) dashboards from
+## observability/dashboards/ (or FILES=...), then alerts from
+## observability/alerts/, into ENV.
 hyperdx-apply:
 	./scripts/hyperdx-sync.sh apply $(ENV) $(FILES)
 

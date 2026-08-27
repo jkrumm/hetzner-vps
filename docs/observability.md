@@ -377,6 +377,29 @@ stripped so files are env-portable), `apply` validates
 (`POST /dashboards/validate`) then upserts **by dashboard name** (`PUT` if a
 same-named dashboard exists in the target env, else `POST`).
 
+### Alerts → Slack
+
+`make hyperdx-webhook-setup` (prod-only, idempotent) creates or updates a
+HyperDX webhook named `Slack #alerts` (service `slack`) pointed at
+`op://common/slack/WEBHOOK_ALERTS`. Run it once before applying any alert
+that notifies over Slack — alerts reference this webhook by **name**, not id.
+
+Alerts themselves are code too: the same `hyperdx-export`/`hyperdx-apply`
+targets also cover `observability/alerts/*.json`, using the REST v2 `/alerts`
+endpoint (source: `saved_search` or `tile`; threshold + thresholdType +
+interval + a `channel: {type: "webhook", webhookId}`). Exported files swap
+`dashboardId`/`tileId`/`savedSearchId`/`channel.webhookId` for
+`dashboard`/`tile`/`savedSearch`/`channel.webhook` names, which `apply`
+resolves back into the target env's ids — see `observability/README.md` for
+the full loop and file shape.
+
+Silence an alert either from the HyperDX UI (per-alert silence with an
+expiry) or by writing a `silenced: {by, at, until}` block through the
+`save_alert` MCP tool — REST v2's alert schema doesn't accept `silenced` on
+write, so a silence set via MCP doesn't round-trip through
+`hyperdx-export`/`hyperdx-apply` (by design: silences are operational state,
+not desired configuration).
+
 ### Deep-linking to a dashboard
 
 `https://hyperdx.${DOMAIN}/dashboards/<id>?from=<epoch-ms>&to=<epoch-ms>&kiosk=true`

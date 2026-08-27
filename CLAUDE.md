@@ -38,11 +38,12 @@ make cron-env-seed       # materialize /etc/vps/*.env for cron jobs from 1Passwo
 # FPP TLS cert sync (extracts *.free-planning-poker.com from traefik/acme.json into apps/fpp/certs/)
 make fpp-cert-sync       # run once after networking-up; cron does it every 6h
 
-# HyperDX agent access + dashboards-as-code (see docs/observability.md → "Agent access")
+# HyperDX agent access + dashboards/alerts-as-code (see docs/observability.md → "Agent access")
 make hyperdx-agent-setup       # prod — idempotent agent user + accessKey setup, MCP smoke test
 make hyperdx-dev-bootstrap     # dev — idempotent local user + accessKey bootstrap, MCP smoke test
-make hyperdx-export ENV=dev    # export dashboards → observability/dashboards/*.json
-make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards from that directory
+make hyperdx-webhook-setup     # prod — idempotent Slack webhook ("Slack #alerts") setup
+make hyperdx-export ENV=dev    # export dashboards + alerts → observability/{dashboards,alerts}/*.json
+make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then alerts, from those directories
 make clickstack-restart        # dev — restart clickstack (fixes a dead local ClickHouse process)
 
 # Status + ops
@@ -275,7 +276,8 @@ scripts/firewall.sh           UFW status — provider-level firewall configured 
 scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed
 scripts/hyperdx-agent-setup.sh  Prod — idempotent HyperDX agent user + accessKey setup, MCP smoke test (make hyperdx-agent-setup)
 scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + accessKey bootstrap, MCP smoke test (make hyperdx-dev-bootstrap)
-scripts/hyperdx-sync.sh       Dashboards-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
+scripts/hyperdx-webhook-setup.sh  Prod — idempotent Slack webhook ("Slack #alerts") setup from op://common/slack/WEBHOOK_ALERTS (make hyperdx-webhook-setup)
+scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
 observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
 cron/pg-backup                Postgres backup, daily 03:00
 cron/pg-health                Postgres liveness heartbeat, every minute — sources /etc/vps/pg-health.env (no op run — rate limits)

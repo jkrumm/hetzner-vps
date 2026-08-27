@@ -1,0 +1,352 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "health",
+      "title": "Health"
+    },
+    {
+      "collapsed": false,
+      "id": "routes",
+      "title": "Routes"
+    },
+    {
+      "collapsed": false,
+      "id": "deps",
+      "title": "Dependencies (client spans)"
+    },
+    {
+      "collapsed": false,
+      "id": "errors",
+      "title": "Errors"
+    },
+    {
+      "collapsed": false,
+      "id": "browser",
+      "title": "Dashboard (browser)"
+    }
+  ],
+  "filters": [],
+  "name": "Argo API",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "agent"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "backgroundChart": {
+          "type": "area"
+        },
+        "color": "chart-blue",
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "numberFormat": {
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0df09140756bb26708e",
+      "name": "Requests",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "> 1%",
+            "operator": "gte",
+            "value": 0.01
+          },
+          {
+            "color": "chart-error",
+            "label": "> 5%",
+            "operator": "gte",
+            "value": 0.05
+          }
+        ],
+        "displayType": "number",
+        "formulas": [
+          {
+            "alias": "Error rate %",
+            "expression": "A / B",
+            "numberFormat": {
+              "mantissa": 2,
+              "output": "percent"
+            }
+          }
+        ],
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server' AND (StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0df09140756bb26708f",
+      "name": "Error rate (%)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "> 1s",
+            "operator": "gte",
+            "value": 1000000000
+          },
+          {
+            "color": "chart-error",
+            "label": "> 3s",
+            "operator": "gte",
+            "value": 3000000000
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "factor": 1e-09,
+          "output": "duration"
+        },
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0df09140756bb267090",
+      "name": "p95 latency",
+      "w": 6,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors logged",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Error logs",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "sourceId": "69cd0b07911482e6218c0ef9"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a8ff0df09140756bb267091",
+      "name": "Error logs",
+      "w": 6,
+      "x": 18,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['http.route']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Requests",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 8,
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "routes",
+      "h": 6,
+      "id": "6a8ff0df09140756bb267092",
+      "name": "Requests by route (top 8)",
+      "w": 12,
+      "x": 0,
+      "y": 3
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connectionId": "69cd0b07911482e6218c0ef5",
+        "displayType": "line",
+        "fillNulls": true,
+        "sourceId": "69cd0b07911482e6218c0efb",
+        "sqlTemplate": "SELECT $__timeInterval(Timestamp) AS ts, SpanAttributes['http.route'] AS Route, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Server' AND $__filters AND SpanAttributes['http.route'] IN (SELECT SpanAttributes['http.route'] FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Server' AND SpanAttributes['http.route'] != '' GROUP BY 1 ORDER BY count() DESC LIMIT 8) GROUP BY ts, Route ORDER BY ts LIMIT 5000"
+      },
+      "containerId": "routes",
+      "h": 6,
+      "id": "6a8ff0df09140756bb267093",
+      "name": "p95 latency by route (ms) \u2014 8 busiest routes",
+      "w": 12,
+      "x": 12,
+      "y": 3
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connectionId": "69cd0b07911482e6218c0ef5",
+        "displayType": "table",
+        "onClick": {
+          "target": {
+            "id": "69cd0b07911482e6218c0efb",
+            "mode": "id"
+          },
+          "type": "search",
+          "whereLanguage": "sql",
+          "whereTemplate": "ServiceName = 'argo-api' AND SpanKind = 'Server' AND SpanAttributes['http.request.method'] = '{{Method}}' AND SpanAttributes['http.route'] = '{{Route}}'"
+        },
+        "sourceId": "69cd0b07911482e6218c0efb",
+        "sqlTemplate": "SELECT SpanAttributes['http.request.method'] AS Method, SpanAttributes['http.route'] AS Route, count() AS Requests, countIf(StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500') AS Errors, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Server' AND SpanAttributes['http.route'] != '' AND $__filters GROUP BY Method, Route HAVING Requests >= 3 ORDER BY p95_ms DESC LIMIT 30"
+      },
+      "containerId": "routes",
+      "h": 8,
+      "id": "6a8ff0df09140756bb267094",
+      "name": "Slowest routes (\u2265 3 requests) \u2014 p50/p95 ms, requests, errors",
+      "w": 24,
+      "x": 0,
+      "y": 9
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connectionId": "69cd0b07911482e6218c0ef5",
+        "displayType": "table",
+        "sourceId": "69cd0b07911482e6218c0efb",
+        "sqlTemplate": "SELECT if(SpanAttributes['db.system'] != '', concat('postgres ', SpanName), SpanAttributes['server.address']) AS Dependency, count() AS Calls, countIf(StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '400') AS Errors, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Client' AND $__filters GROUP BY Dependency ORDER BY Calls DESC LIMIT 25"
+      },
+      "containerId": "deps",
+      "h": 8,
+      "id": "6a8ff0df09140756bb267095",
+      "name": "Dependencies \u2014 calls, errors (HTTP \u2265 400 or span error), p95 ms",
+      "w": 24,
+      "x": 0,
+      "y": 17
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['http.route']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server' AND (StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 8,
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "errors",
+      "h": 6,
+      "id": "6a8ff0df09140756bb267096",
+      "name": "Errors by route",
+      "w": 10,
+      "x": 0,
+      "y": 25
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, SeverityText, Body",
+        "sourceId": "69cd0b07911482e6218c0ef9",
+        "where": "ServiceName = 'argo-api'",
+        "whereLanguage": "sql"
+      },
+      "containerId": "errors",
+      "h": 6,
+      "id": "6a8ff0df09140756bb267097",
+      "name": "Recent error logs",
+      "w": 14,
+      "x": 10,
+      "y": 25
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['http.status_code']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed fetches",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-dashboard' AND SpanKind = 'Client' AND SpanAttributes['http.status_code'] >= '400'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 6,
+        "sourceId": "69cd0b07911482e6218c0efb"
+      },
+      "containerId": "browser",
+      "h": 5,
+      "id": "6a8ff0df09140756bb267098",
+      "name": "Dashboard fetch failures by HTTP status (\u2265 400)",
+      "w": 12,
+      "x": 0,
+      "y": 31
+    }
+  ]
+}
