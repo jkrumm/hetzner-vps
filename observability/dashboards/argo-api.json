@@ -225,7 +225,7 @@
     {
       "config": {
         "configType": "sql",
-        "connectionId": "69cd0b07911482e6218c0ef5",
+        "connection": "Local ClickHouse",
         "displayType": "line",
         "fillNulls": true,
         "source": "Traces",
@@ -242,7 +242,7 @@
     {
       "config": {
         "configType": "sql",
-        "connectionId": "69cd0b07911482e6218c0ef5",
+        "connection": "Local ClickHouse",
         "displayType": "table",
         "onClick": {
           "target": {
@@ -267,7 +267,7 @@
     {
       "config": {
         "configType": "sql",
-        "connectionId": "69cd0b07911482e6218c0ef5",
+        "connection": "Local ClickHouse",
         "displayType": "table",
         "source": "Traces",
         "sqlTemplate": "SELECT if(SpanAttributes['db.system'] != '', concat('postgres ', SpanName), SpanAttributes['server.address']) AS Dependency, count() AS Calls, countIf(StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '400') AS Errors, round(quantile(0.5)(Duration) / 1e6) AS p50_ms, round(quantile(0.95)(Duration) / 1e6) AS p95_ms FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'argo-api' AND SpanKind = 'Client' AND $__filters GROUP BY Dependency ORDER BY Calls DESC LIMIT 25"

@@ -38,7 +38,9 @@
 # (and a table tile's row-click search target, when it points at a source)
 # are per-env ids too. Both get swapped for the source NAME on export and
 # resolved back via GET /sources on apply, failing clearly on an unknown
-# source name.
+# source name. A SQL tile's `config.connectionId` gets the same treatment via
+# GET /connections, swapped for `connection` (name) on export and resolved
+# back on apply, failing clearly on an unknown connection name.
 # =============================================================================
 set -euo pipefail
 
@@ -94,11 +96,12 @@ cmd_export() {
   resolve_env "$env"
   mkdir -p "$DASH_DIR" "$ALERT_DIR"
 
-  local dash_resp source_resp
+  local dash_resp source_resp connection_resp
   dash_resp=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
   source_resp=$(curl -fsS "${BASE}/api/api/v2/sources" -H "Authorization: Bearer ${KEY}")
+  connection_resp=$(curl -fsS "${BASE}/api/api/v2/connections" -H "Authorization: Bearer ${KEY}")
 
-  HDX_RESP="$dash_resp" HDX_SOURCE="$source_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
+  HDX_RESP="$dash_resp" HDX_SOURCE="$source_resp" HDX_CONNECTION="$connection_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
 import json
 import os
 import re
@@ -150,15 +153,37 @@ def resolve_source_refs(obj, source_name_by_id, dash_name):
     return obj
 
 
+# A SQL tile's config.connectionId is a per-env id too (the ClickHouse
+# connection registered in that env's Mongo). Swap it for the connection's
+# NAME the same way: any dict with a "connectionId" key gets that id
+# replaced by a "connection" key holding the name.
+def resolve_connection_refs(obj, connection_name_by_id, dash_name):
+    if isinstance(obj, dict):
+        obj = dict(obj)
+        if isinstance(obj.get("connectionId"), str):
+            cid = obj.pop("connectionId")
+            name = connection_name_by_id.get(cid)
+            if name is None:
+                sys.exit(f"ERROR: dashboard '{dash_name}' references unknown connectionId {cid}")
+            obj["connection"] = name
+        return {k: resolve_connection_refs(v, connection_name_by_id, dash_name) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [resolve_connection_refs(v, connection_name_by_id, dash_name) for v in obj]
+    return obj
+
+
 resp = json.loads(os.environ["HDX_RESP"])
 sources = json.loads(os.environ["HDX_SOURCE"]).get("data", [])
 source_name_by_id = {s["id"]: s.get("name") for s in sources}
+connections = json.loads(os.environ["HDX_CONNECTION"]).get("data", [])
+connection_name_by_id = {c["id"]: c.get("name") for c in connections}
 out_dir = os.environ["HDX_DIR"]
 dashboards = resp.get("data", [])
 count = 0
 for dash in dashboards:
     cleaned = strip(dash)
     cleaned = resolve_source_refs(cleaned, source_name_by_id, cleaned.get("name", "dashboard"))
+    cleaned = resolve_connection_refs(cleaned, connection_name_by_id, cleaned.get("name", "dashboard"))
     slug = slugify(dash.get("name", "dashboard"))
     path = os.path.join(out_dir, f"{slug}.json")
     with open(path, "w") as f:
@@ -263,21 +288,24 @@ cmd_apply() {
   if [[ ${#files[@]} -eq 0 ]]; then
     echo "no dashboard files to apply"
   else
-    local existing source_resp
+    local existing source_resp connection_resp
     existing=$(curl -fsS "${BASE}/api/api/v2/dashboards" -H "Authorization: Bearer ${KEY}")
     source_resp=$(curl -fsS "${BASE}/api/api/v2/sources" -H "Authorization: Bearer ${KEY}")
+    connection_resp=$(curl -fsS "${BASE}/api/api/v2/connections" -H "Authorization: Bearer ${KEY}")
 
     for file in "${files[@]}"; do
       echo "--> ${file}"
 
       local body
-      if ! body=$(HDX_SOURCE="$source_resp" HDX_FILE="$file" python3 <<'PY'
+      if ! body=$(HDX_SOURCE="$source_resp" HDX_CONNECTION="$connection_resp" HDX_FILE="$file" python3 <<'PY'
 import json
 import os
 import sys
 
 sources = json.loads(os.environ["HDX_SOURCE"]).get("data", [])
 source_id_by_name = {s.get("name"): s["id"] for s in sources}
+connections = json.loads(os.environ["HDX_CONNECTION"]).get("data", [])
+connection_id_by_name = {c.get("name"): c["id"] for c in connections}
 
 with open(os.environ["HDX_FILE"]) as f:
     dash = json.load(f)
@@ -300,7 +328,24 @@ def restore_source_refs(obj, dash_name):
         return [restore_source_refs(v, dash_name) for v in obj]
     return obj
 
+# Inverse of the export-time connection transform: any dict holding a
+# "connection" key (name) restores the connectionId.
+def restore_connection_refs(obj, dash_name):
+    if isinstance(obj, dict):
+        obj = dict(obj)
+        if isinstance(obj.get("connection"), str):
+            name = obj.pop("connection")
+            connection_id = connection_id_by_name.get(name)
+            if connection_id is None:
+                sys.exit(f"ERROR: dashboard '{dash_name}' references unknown connection '{name}'")
+            obj["connectionId"] = connection_id
+        return {k: restore_connection_refs(v, dash_name) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [restore_connection_refs(v, dash_name) for v in obj]
+    return obj
+
 resolved = restore_source_refs(dash, dash.get("name", "dashboard"))
+resolved = restore_connection_refs(resolved, dash.get("name", "dashboard"))
 print(json.dumps(resolved))
 PY
       ); then
@@ -353,7 +398,13 @@ print(match['id'] if match else '')
     done
   fi
 
-  apply_alerts || failed=1
+  # Explicit dashboard files = a targeted apply; alerts reference dashboards by
+  # name and would only fail against an environment that lacks the rest.
+  if [[ $# -eq 0 ]]; then
+    apply_alerts || failed=1
+  else
+    echo "skipping alerts (explicit dashboard files given)"
+  fi
 
   [[ "$failed" -eq 0 ]]
 }

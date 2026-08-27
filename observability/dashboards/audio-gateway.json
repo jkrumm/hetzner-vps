@@ -368,7 +368,7 @@
     {
       "config": {
         "configType": "sql",
-        "connectionId": "69cd0b07911482e6218c0ef5",
+        "connection": "Local ClickHouse",
         "displayType": "table",
         "onClick": {
           "target": {

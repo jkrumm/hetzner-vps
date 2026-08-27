@@ -11,7 +11,11 @@ ids/timestamps/team stripped so the file is env-portable — dashboard ids are
 per-env Mongo ObjectIds and never round-trip between dev and prod. Nested ids
 (tile ids, `tiles[].containerId`, `containers[].id`) are structural, not
 server-owned metadata, and are kept as-is — the dashboard write schema
-requires them back.
+requires them back. A tile's `config.sourceId` (and a table tile's row-click
+search target, when it points at a source) and a SQL tile's
+`config.connectionId` are also per-env ids — both are swapped for the
+referenced source/connection's **name** (`source` / `connection`) on export
+and resolved back via `GET /sources` / `GET /connections` on apply.
 
 Each alert file is named `<slug>.json` (slugified from the alert name, or
 `alert-<id>` when unnamed), with ids/timestamps/state/team stripped. Alerts
