@@ -1,0 +1,16 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "VPS \u2014 Overview",
+  "interval": "5m",
+  "message": null,
+  "name": "VPS edge 5xx rate > 5% (5m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "threshold": 0.05,
+  "thresholdType": "above",
+  "tile": "Edge 5xx rate (%)"
+}

@@ -180,7 +180,9 @@ import os
 import re
 import sys
 
-ALERT_STRIP_KEYS = {"id", "state", "teamId", "silenced", "executionErrors", "createdAt", "updatedAt"}
+# `channels` is the server-side mirror of `channel` (HyperDX >= 2.36) and carries a raw
+# webhook id; the request schema only takes `channel`, so it never round-trips.
+ALERT_STRIP_KEYS = {"id", "state", "teamId", "silenced", "executionErrors", "createdAt", "updatedAt", "channels"}
 
 
 def slugify(name):

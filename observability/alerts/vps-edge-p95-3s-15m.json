@@ -1,0 +1,16 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "VPS \u2014 Overview",
+  "interval": "15m",
+  "message": null,
+  "name": "VPS edge p95 > 3s (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "threshold": 3000000000,
+  "thresholdType": "above",
+  "tile": "Edge p95 latency (ms)"
+}
