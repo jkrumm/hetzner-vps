@@ -47,6 +47,11 @@ services:
       # Traces + logs → ClickStack (HyperDX). Unset disables the exporter entirely.
       # SQLite/Argo usage rows stay the cost accounting; this is the timeline view.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      # Header-free caller identity for clients that cannot send x-audio-source
+      # (Hermes' stock OpenAI client, MacWhisper). PROXY_API_KEY is empty here —
+      # the tailnet gates access — so these are labels, not credentials: a client
+      # authenticating with `Bearer hermes` shows up as audio.caller=hermes.
+      AUDIO_CALLER_TOKENS: hermes=hermes,macwhisper=macwhisper
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.
       - /var/lib/audio-gateway:/data

@@ -404,7 +404,14 @@ modelpick-refresh: require-prod
 ## audio-gateway stack (Bun audio service, RollHook-managed) — apps/audio-gateway/compose.yml
 ## Tailscale-only via DNS-only A record audio-gateway.jkrumm.com → ${VPS_TAILSCALE_IP}.
 ## RollHook deploys on push to jkrumm/audio-gateway:master.
-audio-gateway-up:   require-prod ; $(OP_RUN) docker compose -f apps/audio-gateway/compose.yml up -d
+## Recreate-with-config-change without rolling back to a stale :latest (same
+## foot-gun as argo-up): pin the running image SHA into IMAGE_TAG. New code still
+## deploys only through RollHook (push to audio-gateway master).
+audio-gateway-up: require-prod
+	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=audio-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	if [ -z "$$IMG" ]; then echo "  ✗ audio-gateway not running — bootstrap via 'make audio-gateway-bootstrap-image' then push to audio-gateway master"; exit 1; fi; \
+	echo "  pinning audio-gateway → $$IMG"; \
+	$(OP_RUN) env IMAGE_TAG=$$IMG docker compose -f apps/audio-gateway/compose.yml up -d
 audio-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/audio-gateway/compose.yml down
 ## Materialize apps/audio-gateway/.env from .env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
