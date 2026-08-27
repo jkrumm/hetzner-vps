@@ -57,7 +57,7 @@ endif
         modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-restart
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-restart clickstack-upgrade
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -485,6 +485,13 @@ hyperdx-apply:
 ## the all-in-one container still reports healthy (the healthcheck only covers the UI).
 clickstack-restart: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml restart clickstack
+
+## Dev — pull the latest clickstack image and recreate the container (data volumes
+## persist). `make up` never pulls, so the dev HyperDX drifts behind prod (Watchtower)
+## until this runs — tile features differ between versions.
+clickstack-upgrade: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml pull clickstack
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d clickstack
 
 ## Status — docker ps with name/status/ports
 ps:
