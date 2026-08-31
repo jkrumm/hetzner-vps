@@ -270,7 +270,7 @@
       "name": "TTS requests by lane/mode (count per interval)",
       "w": 12,
       "x": 0,
-      "y": 4
+      "y": 0
     },
     {
       "config": {
@@ -312,7 +312,7 @@
       "name": "TTS latency p50 / p95 by lane/mode",
       "w": 12,
       "x": 12,
-      "y": 4
+      "y": 0
     },
     {
       "config": {
@@ -337,7 +337,7 @@
       "name": "TTS profiles \u2014 per lane/mode/model: requests, wall p50/p95 (ms), p95 real-time factor (compute s per audio s), chars, audio s, multi-chunk share, USD, USD per audio s \u2014 click a row to search its spans",
       "w": 24,
       "x": 0,
-      "y": 10
+      "y": 6
     },
     {
       "config": {
@@ -365,7 +365,7 @@
       "name": "Where the time goes \u2014 p95 per pipeline stage (child spans)",
       "w": 12,
       "x": 0,
-      "y": 15
+      "y": 0
     },
     {
       "config": {
@@ -390,7 +390,7 @@
       "name": "Synth chunks per model \u2014 wall p50/p95 (ms), p95 Replicate compute (ms), p95 overhead = wall \u2212 compute (queue + polling; Gemini reports no compute), avg polls",
       "w": 12,
       "x": 12,
-      "y": 15
+      "y": 0
     },
     {
       "config": {
@@ -415,7 +415,7 @@
       "name": "Prep LLM (audio.prep) \u2014 per kind/model: calls, p50/p95 (ms), median input chars vs output tokens (compression: ~25 tokens/100 chars = no compression)",
       "w": 12,
       "x": 0,
-      "y": 21
+      "y": 6
     },
     {
       "config": {
@@ -446,7 +446,7 @@
       "name": "Multi-chunk TTS requests (count, chunks > 1)",
       "w": 6,
       "x": 12,
-      "y": 21
+      "y": 6
     },
     {
       "config": {
@@ -477,7 +477,7 @@
       "name": "Max chunks in one TTS request",
       "w": 6,
       "x": 18,
-      "y": 21
+      "y": 6
     },
     {
       "config": {
@@ -519,7 +519,7 @@
       "name": "STT latency p50 / p95 by served model",
       "w": 12,
       "x": 0,
-      "y": 37
+      "y": 0
     },
     {
       "config": {
@@ -567,7 +567,7 @@
       "name": "STT fallback rate (%)",
       "w": 6,
       "x": 12,
-      "y": 37
+      "y": 0
     },
     {
       "config": {
@@ -603,7 +603,7 @@
       "name": "STT model overrides (count, requested \u2260 served)",
       "w": 6,
       "x": 18,
-      "y": 37
+      "y": 0
     },
     {
       "config": {
@@ -628,7 +628,7 @@
       "name": "STT by served model \u2014 requests, p50/p95 (ms), fallbacks, overrides, errors \u2014 click a row to search",
       "w": 12,
       "x": 12,
-      "y": 40
+      "y": 3
     },
     {
       "config": {
@@ -653,7 +653,7 @@
       "name": "Failed requests by lane (count per interval, 4xx/5xx or span error)",
       "w": 12,
       "x": 0,
-      "y": 44
+      "y": 0
     },
     {
       "config": {
@@ -689,7 +689,7 @@
       "name": "Warn logs (count \u2014 model overrides, STT fallbacks)",
       "w": 4,
       "x": 12,
-      "y": 44
+      "y": 0
     },
     {
       "config": {
@@ -725,7 +725,7 @@
       "name": "Error logs (count \u2014 upstream failures)",
       "w": 4,
       "x": 16,
-      "y": 44
+      "y": 0
     },
     {
       "config": {
@@ -741,7 +741,7 @@
       "name": "Recent warn + error logs",
       "w": 12,
       "x": 12,
-      "y": 47
+      "y": 3
     },
     {
       "config": {
@@ -766,7 +766,7 @@
       "name": "Recent requests \u2014 click a row to open its spans",
       "w": 24,
       "x": 0,
-      "y": 50
+      "y": 0
     },
     {
       "config": {
@@ -842,7 +842,7 @@
       "name": "Cost in range (USD, estimated)",
       "w": 6,
       "x": 0,
-      "y": 26
+      "y": 0
     },
     {
       "config": {
@@ -873,7 +873,7 @@
       "name": "Chars billed (ElevenLabs, sum)",
       "w": 6,
       "x": 0,
-      "y": 29
+      "y": 3
     },
     {
       "config": {
@@ -898,7 +898,7 @@
       "name": "Requests by caller (count per interval)",
       "w": 18,
       "x": 6,
-      "y": 26
+      "y": 0
     },
     {
       "config": {
@@ -923,7 +923,7 @@
       "name": "Cost by caller \u2014 requests, USD, chars billed, audio s, p95 (ms), unpriced % (no cost attribute) \u2014 click a row to search",
       "w": 12,
       "x": 0,
-      "y": 32
+      "y": 6
     },
     {
       "config": {
@@ -939,7 +939,7 @@
       "name": "Cost by lane/model (TTS) \u2014 requests, USD, USD per audio second, USD per 1k chars (priced requests only in the denominators)",
       "w": 12,
       "x": 12,
-      "y": 32
+      "y": 6
     },
     {
       "config": {
@@ -978,7 +978,7 @@
       "name": "TTS fallbacks + retries (count)",
       "w": 4,
       "x": 20,
-      "y": 44
+      "y": 0
     }
   ]
 }

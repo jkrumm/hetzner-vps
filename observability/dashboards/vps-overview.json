@@ -225,7 +225,7 @@
       "name": "Requests by service (count per interval)",
       "w": 8,
       "x": 0,
-      "y": 4
+      "y": 0
     },
     {
       "config": {
@@ -268,7 +268,7 @@
       "name": "Error rate by service (%)",
       "w": 8,
       "x": 8,
-      "y": 4
+      "y": 0
     },
     {
       "config": {
@@ -298,7 +298,7 @@
       "name": "p95 latency by service",
       "w": 8,
       "x": 16,
-      "y": 4
+      "y": 0
     },
     {
       "config": {
@@ -370,7 +370,7 @@
       "name": "Services: requests / errors / p50 / p95 (click a row to search its spans)",
       "w": 24,
       "x": 0,
-      "y": 10
+      "y": 6
     },
     {
       "config": {

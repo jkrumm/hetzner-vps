@@ -1,0 +1,162 @@
+{
+  "filters": [],
+  "name": "Research",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "research-gateway"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, SpanAttributes['research.depth'] depth, count() jobs,\n       countIf(SpanAttributes['report.status']='partial') partial,\n       round(avg(toFloat64OrZero(SpanAttributes['research.digests'])),1) digests,\n       round(avg(toFloat64OrZero(SpanAttributes['report.citations'])),1) citations,\n       round(avg(toFloat64OrZero(SpanAttributes['grounding.citations_dropped'])),2) dropped,\n       round(avg(toFloat64OrZero(SpanAttributes['grounding.confidence_capped'])),2) capped,\n       round(avg(toFloat64OrZero(SpanAttributes['grounding.pages_retrieved'])),1) pages_ok,\n       round(avg(toFloat64OrZero(SpanAttributes['grounding.pages_failed'])),1) pages_fail\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.job'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY d, depth ORDER BY d DESC LIMIT 100"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdc9",
+      "name": "1. Report quality \u2014 the grounding funnel",
+      "w": 24,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanName, count() n,\n       round(quantile(0.5)(Duration)/1e9,1) p50_s,\n       round(quantile(0.95)(Duration)/1e9,1) p95_s,\n       round(max(Duration)/1e9,1) max_s\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND Timestamp > now() - INTERVAL 7 DAY\n  AND SpanName LIKE 'research.%'\nGROUP BY SpanName ORDER BY p95_s DESC LIMIT 50"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdca",
+      "name": "2. Where a 28-minute job goes \u2014 stage breakdown",
+      "w": 12,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT TraceId, SpanAttributes['research.round'] round, count() workers,\n       round(min(Duration)/1e9,1) fastest_s, round(max(Duration)/1e9,1) slowest_s,\n       round((max(Duration)-avg(Duration))/1e9,1) tail_cost_s\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.worker'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY TraceId, round HAVING workers > 1 ORDER BY tail_cost_s DESC LIMIT 20"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdcb",
+      "name": "2b. The straggler, per round",
+      "w": 12,
+      "x": 12,
+      "y": 6
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT coalesce(nullIf(SpanAttributes['worker.forced_submit'],''),'natural') ended_by,\n       count() n,\n       countIf(SpanAttributes['worker.digest']='true') with_digest,\n       round(avg(Duration)/1e9,1) avg_s,\n       round(avg(toFloat64OrZero(SpanAttributes['worker.steps'])),1) steps,\n       round(avg(toFloat64OrZero(SpanAttributes['worker.findings_stripped'])),2) stripped\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.worker'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY ended_by ORDER BY n DESC LIMIT 20"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdcc",
+      "name": "3. How workers end",
+      "w": 12,
+      "x": 0,
+      "y": 12
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT a['step'] step, count() attempts,\n       countIf(a['ok']='true') wins,\n       round(100*countIf(a['ok']='true')/count(),1) win_pct,\n       round(avg(toFloat64OrZero(a['ms']))) avg_ms,\n       round(sumIf(toFloat64OrZero(a['ms']), a['ok']!='true')/1000) wasted_s\nFROM $__sourceTable\nARRAY JOIN Events.Name AS en, Events.Attributes AS a\nWHERE ServiceName='research-gateway' AND SpanName='tool.fetchPage' AND en='fetch.step'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY step ORDER BY attempts DESC LIMIT 50"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdcd",
+      "name": "4. The fetch waterfall \u2014 which fallback step earns its place",
+      "w": 12,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['fetch.host'] host, count() tries,\n       countIf(SpanAttributes['fetch.ok']='true') ok,\n       countIf(SpanAttributes['fetch.ok']!='true') blocked,\n       any(SpanAttributes['fetch.error']) sample_error,\n       arrayStringConcat(groupUniqArray(SpanAttributes['fetch.via']), ', ') vias\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='tool.fetchPage'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY host HAVING blocked > 0 ORDER BY blocked DESC LIMIT 30"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdce",
+      "name": "5. Hosts that block us",
+      "w": 24,
+      "x": 0,
+      "y": 18
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['research.depth'] depth, count() jobs,\n       round(avg(toFloat64OrZero(SpanAttributes['cost.total_usd'])),4) avg_usd,\n       round(quantile(0.95)(toFloat64OrZero(SpanAttributes['cost.total_usd'])),4) p95_usd,\n       round(sum(toFloat64OrZero(SpanAttributes['cost.llm_usd'])),3) llm_usd,\n       round(sum(toFloat64OrZero(SpanAttributes['cost.search_usd'])),3) search_usd,\n       round(100*sum(toFloat64OrZero(SpanAttributes['llm.cached_input_tokens']))\n             / nullIf(sum(toFloat64OrZero(SpanAttributes['llm.input_tokens'])),0),1) cache_pct,\n       round(avg(Duration)/1e9) avg_s\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.job'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY depth LIMIT 20"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdcf",
+      "name": "6. What a job costs, by depth",
+      "w": 12,
+      "x": 0,
+      "y": 24
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['search.via'] via, count() n,\n       round(avg(toFloat64OrZero(SpanAttributes['search.results'])),1) results,\n       round(avg(Duration)/1e6) avg_ms\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='tool.searchWeb'\n  AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY via ORDER BY n DESC LIMIT 20"
+      },
+      "h": 6,
+      "id": "6a955a0f0ff5e7ec086ebdd0",
+      "name": "7. Search backend split",
+      "w": 12,
+      "x": 12,
+      "y": 24
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT Timestamp, SpanName, StatusMessage,\n       SpanAttributes['worker.sub_question'] sub_question, TraceId\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND StatusCode='Error'\n  AND Timestamp > now() - INTERVAL 7 DAY\nORDER BY Timestamp DESC LIMIT 50"
+      },
+      "h": 7,
+      "id": "6a955a0f0ff5e7ec086ebdd1",
+      "name": "8. Errors",
+      "w": 24,
+      "x": 0,
+      "y": 30
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, SeverityText, ServiceName, Body, TraceId",
+        "source": "Logs",
+        "where": "ServiceName:\"research-gateway\"",
+        "whereLanguage": "lucene"
+      },
+      "h": 8,
+      "id": "6a955a0f0ff5e7ec086ebdd2",
+      "name": "9. Logs",
+      "w": 24,
+      "x": 0,
+      "y": 37
+    }
+  ]
+}
