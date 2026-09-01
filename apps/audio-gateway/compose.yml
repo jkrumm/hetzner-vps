@@ -52,6 +52,16 @@ services:
       # the tailnet gates access — so these are labels, not credentials: a client
       # authenticating with `Bearer hermes` shows up as audio.caller=hermes.
       AUDIO_CALLER_TOKENS: hermes=hermes,macwhisper=macwhisper
+      # Podcast pipeline (POST /v1/podcasts): job ledger + episode artifacts on the
+      # same /data volume as the usage DB; covers via the image-gen gateway over the
+      # shared proxy net; publishing into Audiobookshelf over the tailnet (ABS_* come
+      # from 1Password — unset = publish step skipped, episodes stay downloadable).
+      PODCAST_DATA_DIR: /data/podcasts
+      PODCAST_DB: /data/podcasts.db
+      IMAGE_GEN_URL: http://image-gen-gateway:7716
+      IMAGE_GEN_API_KEY: ${IMAGE_GEN_API_KEY}
+      ABS_URL: ${ABS_URL:-}
+      ABS_API_KEY: ${ABS_API_KEY:-}
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.
       - /var/lib/audio-gateway:/data

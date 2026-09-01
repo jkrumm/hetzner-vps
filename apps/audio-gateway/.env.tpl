@@ -14,3 +14,10 @@ USAGE_HTTP_URL=http://argo-api:4000/usage/records
 USAGE_SOURCE_LABEL=audio-gateway
 ARGO_API_SECRET=op://common/api/SECRET
 MACHINE=vps
+# Podcast pipeline — cover art via the image-gen gateway (same bearer the Tauri app uses).
+IMAGE_GEN_API_KEY=op://vps/image-gen-gateway/API_SECRET
+# Audiobookshelf publish target. Uncomment once the `audiobookshelf` item exists in the
+# vps vault (fields API_KEY = the ABS API key, URL = the tailnet URL of the ABS instance),
+# then add `ABS_URL` and `ABS_API_KEY` lines pointing at vault vps / item audiobookshelf /
+# those fields. `op inject` resolves every reference in the file — even inside a comment —
+# and fails the WHOLE file on one missing item, which is why no reference is spelled out here.
