@@ -30,7 +30,9 @@ services:
     networks:
       - proxy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      # 127.0.0.1, not localhost: busybox wget resolves localhost to ::1 first and nginx
+      # answers on IPv4 — the first start sat at "health: starting" with connection refused.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 10s
       timeout: 5s
       start_period: 5s
