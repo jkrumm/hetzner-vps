@@ -553,13 +553,13 @@ firewall: require-prod
 
 ## Interactive psql shell — works in both envs.
 shell-postgres:
-	$(OP_RUN_ENV) docker exec -it postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+	$(OP_RUN_ENV) sh -c 'docker exec -it postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 ## Non-interactive psql: SQL on stdin, results on stdout (no TTY — usable over
 ## plain ssh and from agents). Same env wrapper as shell-postgres.
 ##   make sql-postgres <<< "SELECT count(*) FROM usage_record"
 sql-postgres:
-	@$(OP_RUN_ENV) docker exec -i postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB} -v ON_ERROR_STOP=1
+	@$(OP_RUN_ENV) sh -c 'docker exec -i postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1'
 
 ## Exact per-table row counts (Postgres all schemas + MariaDB fpp). Read-only,
 ## both envs, diff-friendly — use to verify two DB states match after sync/restore.
