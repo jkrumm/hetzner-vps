@@ -42,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help require-prod require-dev \
+.PHONY: help require-prod require-dev meteo-up meteo-down meteo-env meteo-bootstrap-image meteo-redeploy \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
@@ -337,7 +337,6 @@ research-gateway-env: require-prod
 ## apps/meteo/compose.yml. Public at meteo.DOMAIN through the cloudflared tunnel.
 ## The mini does all computation; this container serves the built map, the basemap
 ## archive under /var/lib/meteo/basemap, and a disk cache of proxied API responses.
-.PHONY: meteo-up meteo-down meteo-env meteo-bootstrap-image meteo-redeploy
 meteo-up: require-prod
 	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=meteo-edge' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
 	if [ -z "$$IMG" ]; then \

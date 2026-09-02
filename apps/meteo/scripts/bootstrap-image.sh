@@ -21,6 +21,11 @@ if [ ! -f "${SRC_DIR}/deploy/edge/Dockerfile" ]; then
   echo "✗ ${SRC_DIR}/deploy/edge/Dockerfile missing — run 'make edge-bootstrap' in the meteo repo on the mini first" >&2
   exit 1
 fi
+# /tmp is world-writable: only build a context this user created, never one planted there.
+if [ ! -O "${SRC_DIR}" ]; then
+  echo "✗ ${SRC_DIR} is not owned by $(id -un) — refusing to build a context someone else wrote" >&2
+  exit 1
+fi
 
 echo "[1/3] docker login ${REGISTRY}"
 echo "${ROLLHOOK_SECRET}" | docker login "${REGISTRY}" -u rollhook --password-stdin
