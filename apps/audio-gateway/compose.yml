@@ -67,6 +67,9 @@ services:
       IMAGE_GEN_API_KEY: ${IMAGE_GEN_API_KEY}
       ABS_URL: ${ABS_URL:-}
       ABS_API_KEY: ${ABS_API_KEY:-}
+      # Finished/failed podcast jobs are announced in this Slack channel via argo-api
+      # (channel NAME, resolved through Argo's channel list with ARGO_API_SECRET).
+      PODCAST_NOTIFY_CHANNEL: media
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.
       - /var/lib/audio-gateway:/data
