@@ -29,6 +29,10 @@ services:
     security_opt:
       - no-new-privileges:true
     mem_limit: 512m
+    # A podcast job runs for 10–20 minutes. RollHook brings the replacement
+    # container up first, so the old one may take its time: SIGTERM starts the
+    # drain (SHUTDOWN_DRAIN_MS) and Docker waits this long before SIGKILL.
+    stop_grace_period: 25m
     environment:
       NODE_ENV: production
       PORT: "7714"
@@ -56,6 +60,7 @@ services:
       # same /data volume as the usage DB; covers via the image-gen gateway over the
       # shared proxy net; publishing into Audiobookshelf over the tailnet (ABS_* come
       # from 1Password — unset = publish step skipped, episodes stay downloadable).
+      SHUTDOWN_DRAIN_MS: "1440000"
       PODCAST_DATA_DIR: /data/podcasts
       PODCAST_DB: /data/podcasts.db
       IMAGE_GEN_URL: http://image-gen-gateway:7716
