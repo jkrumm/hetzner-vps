@@ -24,6 +24,7 @@ make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
+make meteo-up    / make meteo-down   # nginx edge for meteo.DOMAIN; make meteo-env first, basemap under /var/lib/meteo
 make imgproxy-up / make imgproxy-down
 
 # Manual image upgrades — Postgres/Valkey/MariaDB are excluded from Watchtower

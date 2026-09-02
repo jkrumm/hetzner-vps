@@ -333,6 +333,43 @@ research-gateway-env: require-prod
 	chmod 644 apps/research-gateway/.env
 	@echo "Wrote apps/research-gateway/.env (chmod 644, gitignored)"
 
+## meteo stack (nginx edge in front of the tileserver on the Mac mini, RollHook-managed) —
+## apps/meteo/compose.yml. Public at meteo.DOMAIN through the cloudflared tunnel.
+## The mini does all computation; this container serves the built map, the basemap
+## archive under /var/lib/meteo/basemap, and a disk cache of proxied API responses.
+.PHONY: meteo-up meteo-down meteo-env meteo-bootstrap-image meteo-redeploy
+meteo-up: require-prod
+	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=meteo-edge' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	if [ -z "$$IMG" ]; then \
+	  echo "  no running container — genesis start from :latest (bootstrap-seeded)"; \
+	  $(OP_RUN) docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env up -d; \
+	else \
+	  echo "  pinning meteo-edge → $$IMG"; \
+	  $(OP_RUN) env METEO_EDGE_IMAGE=$$IMG docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env up -d; \
+	fi
+meteo-down: require-prod ; $(OP_RUN) docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env down
+
+## Trigger a fresh RollHook deploy by pushing an empty commit to meteo's master.
+meteo-redeploy: require-dev
+	@if [ ! -d $$HOME/SourceRoot/meteo ]; then echo "  ✗ meteo repo not found at ~/SourceRoot/meteo"; exit 1; fi
+	@cd $$HOME/SourceRoot/meteo && \
+	  git commit --allow-empty -m "chore: redeploy (triggered via vps make meteo-redeploy)" && \
+	  git push && \
+	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/meteo/actions"
+## One-shot bootstrap — build the edge image from the context `make edge-bootstrap` (meteo
+## repo, on the mini) pushed to /tmp/meteo-bootstrap, push :initial + :latest to the registry.
+meteo-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/meteo/scripts/bootstrap-image.sh
+## Materialize apps/meteo/.env from this host's tailscale peer list — the mini's tailnet
+## IP and MagicDNS name are the only two values the edge needs, and neither is a secret.
+## Re-run after a mini rename or re-join.
+meteo-env: require-prod
+	@ip=$$(tailscale ip -4 mini) && \
+	  host=$$(tailscale status --json | jq -r '.Peer[] | select(.HostName=="mini") | .DNSName' | sed 's/\.$$//') && \
+	  printf 'MINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n' "$$ip" "$$host" > apps/meteo/.env && \
+	  chmod 644 apps/meteo/.env && \
+	  echo "Wrote apps/meteo/.env (mini = $$host)"
+
 ## image-gen-gateway stack (Bun image API, RollHook-managed) — apps/image-gen-gateway/compose.yml
 ## Deploys to image.jkrumm.com (Tailscale-only, grey-cloud A record — NOT the cloudflared
 ## tunnel). RollHook deploys on push to jkrumm/image-gen:master touching gateway/** or shared/**.
