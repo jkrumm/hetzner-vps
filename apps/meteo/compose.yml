@@ -6,8 +6,10 @@
 # Mac mini, caching responses on disk for exactly the TTL the origin sets. The mini does
 # every computation; nothing here renders a tile.
 #
-# `.env` here holds MINI_TAILSCALE_IP and MINI_TAILNET_HOST, written by `make meteo-env`
-# from the VPS's own tailscale peer list — no 1Password item, nothing tracked.
+# `.env` here holds DOMAIN plus MINI_TAILSCALE_IP and MINI_TAILNET_HOST, written by
+# `make meteo-env` from 1Password and the VPS's own tailscale peer list — nothing tracked.
+# DOMAIN must be in it: RollHook re-runs compose without op, and an empty DOMAIN in the
+# router label silently registers Host(`meteo`) — a Traefik 404 for the real name.
 # The mini side of the hop is `tailscale serve` on :8081 (dotfiles-private
 # tailscale-serve.mini.conf) plus a tag:vps → tag:devhost tcp:8081 ACL grant.
 #

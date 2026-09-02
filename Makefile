@@ -362,12 +362,13 @@ meteo-bootstrap-image: require-prod
 ## Materialize apps/meteo/.env from this host's tailscale peer list — the mini's tailnet
 ## IP and MagicDNS name are the only two values the edge needs, and neither is a secret.
 ## Re-run after a mini rename or re-join.
+## DOMAIN is written too: RollHook re-runs compose without op, and a label interpolated
+## from an empty DOMAIN registers the router for the bare host "meteo" — a Traefik 404.
 meteo-env: require-prod
-	@ip=$$(tailscale ip -4 mini) && \
-	  host=$$(tailscale status --json | jq -r '.Peer[] | select(.HostName=="mini") | .DNSName' | sed 's/\.$$//') && \
-	  printf 'MINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n' "$$ip" "$$host" > apps/meteo/.env && \
-	  chmod 644 apps/meteo/.env && \
-	  echo "Wrote apps/meteo/.env (mini = $$host)"
+	@$(OP_RUN) sh -c 'ip=$$(tailscale ip -4 mini) && \
+	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
+	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" > apps/meteo/.env && \
+	  chmod 644 apps/meteo/.env && echo "Wrote apps/meteo/.env (mini = $$host)"'
 
 ## image-gen-gateway stack (Bun image API, RollHook-managed) — apps/image-gen-gateway/compose.yml
 ## Deploys to image.jkrumm.com (Tailscale-only, grey-cloud A record — NOT the cloudflared
