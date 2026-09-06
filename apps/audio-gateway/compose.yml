@@ -61,6 +61,11 @@ services:
       # shared proxy net; publishing into Audiobookshelf over the tailnet (ABS_* come
       # from 1Password — unset = publish step skipped, episodes stay downloadable).
       SHUTDOWN_DRAIN_MS: "1440000"
+      # The podcast pipeline moved to the mini instance (audio-gateway
+      # docs/podcast-editorial-room.md, Decision 2): the brain vault and the
+      # research gateway are only reachable there. This container keeps STT/TTS
+      # and answers /v1/podcasts* with a 410 pointing at podcasts.mini.jkrumm.com.
+      PODCAST_ENABLED: "false"
       PODCAST_DATA_DIR: /data/podcasts
       PODCAST_DB: /data/podcasts.db
       IMAGE_GEN_URL: http://image-gen-gateway:7716
