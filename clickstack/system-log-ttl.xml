@@ -1,0 +1,36 @@
+<!--
+  Caps ClickHouse's own system log tables (trace_log, part_log, query_log,
+  metric_log, asynchronous_metric_log, processors_profile_log) at 7 days.
+  These have no TTL by default and grow forever — unlike the actual OTel
+  data (otel_* / hyperdx_* tables), which already carries a 30-day TTL.
+
+  Mounted into the container at
+  /etc/clickhouse-server/config.d/system-log-ttl.xml via compose.monitoring.yml.
+
+  Applying this config renames each affected table aside (to a numbered
+  `_N` copy) and creates a fresh one on ClickHouse restart — the same
+  mechanism that orphans a copy on every ClickHouse version bump via
+  Watchtower. Expect one extra `_N` copy right after the restart that
+  installs this file; drop it same as any other orphan (see
+  docs/observability.md → "System log TTL").
+-->
+<clickhouse>
+  <trace_log>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </trace_log>
+  <part_log>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </part_log>
+  <query_log>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </query_log>
+  <metric_log>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </metric_log>
+  <asynchronous_metric_log>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </asynchronous_metric_log>
+  <processors_profile_log>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </processors_profile_log>
+</clickhouse>

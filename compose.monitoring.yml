@@ -155,6 +155,7 @@ services:
       - clickstack-ch-data:/var/lib/clickhouse
       - clickstack-ch-logs:/var/log/clickhouse-server
       - ./clickstack/otel-custom.yaml:/etc/otelcol-contrib/custom.config.yaml:ro
+      - ./clickstack/system-log-ttl.xml:/etc/clickhouse-server/config.d/system-log-ttl.xml:ro
     networks:
       - monitoring-net
       - proxy

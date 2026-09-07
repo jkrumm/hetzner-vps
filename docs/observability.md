@@ -406,6 +406,34 @@ not desired configuration).
 sharing a fixed time window). `<id>` comes from a dashboard's REST v2 `id`
 field (`GET /api/api/v2/dashboards`).
 
+## System log TTL — ClickHouse's own logs, not OTel data
+
+`clickstack/system-log-ttl.xml` (mounted to
+`/etc/clickhouse-server/config.d/`) caps `trace_log`, `part_log`, `query_log`,
+`metric_log`, `asynchronous_metric_log` and `processors_profile_log` at 7
+days (`<ttl>event_date + INTERVAL 7 DAY DELETE</ttl>`). These are ClickHouse's
+internal diagnostic logs and ship with no TTL at all — unrelated to the OTel
+data (`otel_*`/`hyperdx_*` tables), which already has its own 30-day TTL.
+
+**Why it regrows without this**: applying (or changing) a system-log table's
+config renames the existing table aside to a numbered `<table>_N` copy and
+creates a fresh one on ClickHouse restart. Watchtower auto-upgrades the
+`clickstack` image, so every version bump silently orphans another `_N`
+copy with no TTL of its own — these accumulate forever until dropped by
+hand. First cleanup (2026-09-08) reclaimed ~47 GB this way.
+
+Check for orphans and confirm the live table is the one being written:
+
+```bash
+docker exec clickstack clickhouse-client --query "
+  SELECT table, formatReadableSize(sum(bytes_on_disk)) size, max(modification_time) newest
+  FROM system.parts WHERE active AND database = 'system' AND table LIKE '%\_%'
+  GROUP BY table ORDER BY sum(bytes_on_disk) DESC FORMAT PrettyCompact"
+```
+
+A stale `newest` (weeks/months old) confirms an orphan — drop it with
+`DROP TABLE system.<table> SYNC`. Never drop the un-suffixed table itself.
+
 ## Deploy regression to know about
 
 **`make argo-up` was a foot-gun** — `${IMAGE_TAG:-...:latest}` fell back to
