@@ -48,16 +48,20 @@ ssh vps "docker system df"
 ```
 
 **Expected running containers:**
-- Networking: `cloudflared`, `traefik`, `socket-proxy`, `socket-proxy-claude`, `socket-proxy-rollhook`, `rollhook`
+- Networking: `cloudflared`, `traefik`, `socket-proxy`, `socket-proxy-rollhook`, `rollhook`
 - Infra: `postgres`, `redis`
-- FPP (`apps/fpp/compose.yml`): `mariadb`
+- FPP (`apps/fpp/compose.yml`): `mariadb`, `fpp-server`, `fpp-analytics`, `fpp-analytics-updater`
 - Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
+- Apps (RollHook-managed, auto-suffixed names like `argo-argo-api-146` — match by label, not name): `argo-api`, `argo-dashboard`, `audio-gateway`, `basalt-ui-marketing`, `bun-email-api`, `image-gen-gateway`, `imgproxy`, `meteo-edge`, `photo-gallery`, `research-gateway`, `research-gateway-lightpanda`, `rollhook-marketing`
+
+```bash
+ssh vps "docker ps --format '{{.Label \"com.docker.compose.service\"}}' | sort"
+```
 
 **Thresholds:**
 - CRITICAL: any expected container not running
 - WARN: restart count >3 on any container
 - WARN: reclaimable Docker images >500MB (offer `docker image prune -f`)
-- INFO: `rollhook-marketing-rollhook-marketing-2` is a stale auto-suffixed container from the apps/ compose stack — note its age but do not flag as CRITICAL unless not healthy
 
 ### Phase 3: Cloudflare Tunnel Health
 

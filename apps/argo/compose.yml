@@ -8,14 +8,14 @@
 #
 # Both deployed via RollHook from jkrumm/argo (push to master). Dashboard rebuild
 # embeds VITE_API_URL=https://argo.jkrumm.com/api at build time. API queries homelab
-# services over Tailscale (garmin-collector, docker socket-proxy-claude, uptime-kuma).
+# services over Tailscale (garmin-collector, homelab's docker socket-proxy, uptime-kuma).
 #
 # Bootstrap order on a fresh server:
 #   1. make networking-up + monitoring-up        (Traefik cert + ClickStack for OTLP)
 #   2. make postgres-setup                       (creates argo role + schema)
 #   3. cf DNS: argo.jkrumm.com → ${VPS_TAILSCALE_IP} (grey cloud / DNS-only)
 #   4. push to jkrumm/argo:master → RollHook builds + deploys both services
-#   5. run argo data migration (see apps/api/scripts/migrate-sqlite-to-pg.ts)
+#      (drizzle migrations run on API start — nothing to seed by hand)
 
 networks:
   proxy:
