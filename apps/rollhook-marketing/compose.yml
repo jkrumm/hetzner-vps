@@ -14,7 +14,11 @@ networks:
 
 services:
   rollhook-marketing:
-    image: ${IMAGE_TAG:-rollhook.jkrumm.com/rollhook-marketing:latest}
+    # Built and pushed by rollhook's release workflow to ghcr.io, not to the
+    # private Zot registry the other apps use — the default must match what
+    # RollHook actually pulls, or a bare `compose up` resolves a name that
+    # does not exist.
+    image: ${IMAGE_TAG:-ghcr.io/jkrumm/rollhook-marketing:latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
