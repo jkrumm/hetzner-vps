@@ -1,5 +1,7 @@
 # Slack app identity
 
+App ID: `A0BV9MG54TD` (created 2026-09-07 via `apps.manifest.create`; use it for `apps.manifest.update`).
+
 `app-manifest.json` declares this stack's own Slack bot, so messages it posts
 are attributable at a glance (HomeLab, Hermes, VPS and Argo are four apps, not
 four usernames on one bot).
