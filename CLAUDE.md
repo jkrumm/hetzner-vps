@@ -62,6 +62,7 @@ make pg-sync-schema SCHEMA=argo  # one schema only (least-priv, leaves other sch
 make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
 make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
 make firewall            # show UFW status and rules
+make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
 
 # Restoring PROD from S3 has NO make target by design (it overwrites production).
 # Gated, human-only DR scripts: scripts/restore-pg.sh + apps/fpp/scripts/restore-mariadb.sh
@@ -286,6 +287,7 @@ cron/pg-health.env.tpl        op template for the seeded pg-health cron env (mat
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
+cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (make prune-cron-install) — never volumes
 Makefile                      Operational shortcuts
 ```
 

@@ -55,7 +55,7 @@ endif
         imgproxy-up imgproxy-down \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
-        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune \
+        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-restart clickstack-upgrade
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
@@ -585,3 +585,11 @@ prune:
 	@docker builder prune -af
 	@echo ""
 	@echo "✓ Done. Volumes left intact — run 'docker volume prune' manually if you really mean it."
+
+## Install the weekly image + build-cache prune cron (cron/docker-prune → /etc/cron.d).
+## Prod-only, idempotent; setup.sh installs the same file on a fresh server. Prints
+## what the next run would reclaim.
+prune-cron-install: require-prod
+	sudo install -o root -g root -m 644 cron/docker-prune /etc/cron.d/docker-prune
+	@echo "  ✓ /etc/cron.d/docker-prune installed (Sunday 04:30 — images + build cache, never volumes)"
+	@docker system df | awk 'NR==1 || /^Images|^Build Cache/'

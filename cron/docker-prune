@@ -1,0 +1,14 @@
+# Weekly Docker hygiene — Sunday 04:30 (after Watchtower's 04:00 sweep has pulled
+# the new images, so the superseded ones are unused by then).
+# Images (tagged + dangling, anything no container uses) and build cache older than
+# a week. An unfiltered `builder prune -a` would empty RollHook's whole layer cache
+# and make every app's first build after Sunday a cold one (bun install + every
+# layer for ~12 images); `--filter until=168h` keeps the warm entries.
+# NEVER volumes — that is data (Postgres, ClickHouse, RollHook, fpp-analytics).
+# Stopped containers are left alone too: RollHook's rollout leaves none, and a
+# stopped one is evidence worth reading before it goes.
+# Install: make prune-cron-install   (copies to /etc/cron.d, or setup.sh section 12)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+30 4 * * 0 jkrumm /bin/bash -c 'echo "=== $(date -u +%FT%TZ)"; docker image prune -af && docker builder prune -f --filter until=168h' >> /home/jkrumm/docker-prune.log 2>&1

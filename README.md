@@ -431,6 +431,7 @@ Two daily backups, both stream to the same `jkrumm` B2 bucket under `backups/vps
 | `/etc/cron.d/pg-backup` | 03:00 | `scripts/backup-pg.sh` | `backups/vps/postgres/` | `UPTIME_KUMA_PUSH_URL` |
 | `/etc/cron.d/fpp-mariadb-backup` | 03:30 | `apps/fpp/scripts/backup-mariadb.sh` | `backups/vps/mariadb/` | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` |
 | `/etc/cron.d/pg-health` | every minute | `scripts/health-pg.sh` | n/a (liveness) | `UPTIME_KUMA_POSTGRES_PUSH_URL` |
+| `/etc/cron.d/docker-prune` | Sunday 04:30 | inline `docker image prune -af && docker builder prune -f --filter until=168h` (never volumes) | n/a (hygiene) | — |
 
 ```bash
 # Manual triggers
