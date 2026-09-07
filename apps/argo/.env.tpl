@@ -17,6 +17,7 @@ UPTIME_KUMA_USERNAME=jkrumm
 UPTIME_KUMA_PASSWORD=op://common/uptime-kuma/PASSWORD
 UPTIME_KUMA_API_KEY=op://common/uptime-kuma/API_KEY
 SLACK_BOT_TOKEN=op://common/slack/ARGO_BOT_TOKEN
+SLACK_READ_TOKEN=op://common/slack/BOT_TOKEN
 SLACK_USER_TOKEN=op://common/slack/USER_TOKEN
 GOOGLE_CLIENT_ID=op://common/google-oauth/CLIENT_ID
 GOOGLE_CLIENT_SECRET=op://common/google-oauth/CLIENT_SECRET
