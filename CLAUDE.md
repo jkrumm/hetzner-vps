@@ -71,7 +71,7 @@ make firewall            # show UFW status and rules
 git push && ssh vps "cd ~/vps && git pull"
 ```
 
-> **SSH:** Tailscale only — sshd binds to Tailscale interface, not the public IP. `ssh vps` uses the Tailscale IP from `~/.ssh/config`.
+> **SSH:** Tailscale only — enforced by UFW (default-deny inbound, only `tailscale0` allowed in), **not** by sshd's bind address: sshd may listen on all interfaces. Never set `ListenAddress` to the Tailscale IP (sshd fails at boot when `tailscale0` is late — a lock-out). Proof: `make firewall`. `ssh vps` uses the Tailscale IP from `~/.ssh/config`.
 
 ---
 
@@ -474,6 +474,7 @@ Never violate these:
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
 - Postgres, Valkey, and MariaDB: no auto-update via Watchtower — manual only
 
+- UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
 **FPP MariaDB exception (TCP 33306 inbound):** Vercel needs to reach the FPP database and Cloudflare doesn't proxy MySQL on non-Enterprise plans. Mitigations: TLS required (`--require-secure-transport=ON` + `REQUIRE SSL` on the user), schema-scoped `fpp@'%'` user, fail2ban on auth failures via `DOCKER-USER` chain, no remote root. The deviation is contained in `apps/fpp/` so future apps don't pattern-match off it. See **FPP MariaDB** section above.
 
 ---
@@ -487,7 +488,7 @@ bash /home/jkrumm/vps/scripts/setup.sh
 
 1. `tailscale up` → complete browser auth → note Tailscale IP
 2. Add `OP_SERVICE_ACCOUNT_TOKEN` to `~/.bashrc` → `source ~/.bashrc && op vault list`
-3. Uncomment `ListenAddress <tailscale-ip>` in `/etc/ssh/sshd_config.d/99-hardening.conf` → `systemctl restart sshd`
+3. `ufw status verbose` → default deny incoming, only `tailscale0` allowed in (sshd stays on all interfaces — never rebind it)
 4. `tailscale set --ssh --accept-risk=lose-ssh` → enables SSH badge in Tailscale admin
 5. Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`)
 6. `cd ~/vps && make networking-up` → wait for Traefik to issue `*.${DOMAIN}` cert (1–2 min, check `docker logs traefik | grep -i acme`)
@@ -499,7 +500,7 @@ bash /home/jkrumm/vps/scripts/setup.sh
 12. Add DNS-only A record `db.free-planning-poker.com` → VPS public IP (grey cloud — not proxied)
 13. `reboot` → verify kernel updated, all containers restart automatically
 
-**Note:** HostingFuchs has no panel firewall. UFW + sshd Tailscale binding is sufficient for everything except MariaDB. **Docker bypasses UFW for published ports**, so TCP 33306 is publicly reachable as soon as `make fpp-up` runs — no firewall change needed. fail2ban watches MariaDB auth failures via journald and bans source IPs at the iptables `DOCKER-USER` chain (which Docker DOES evaluate before its NAT rules).
+**Note:** the provider has no panel firewall. UFW (deny inbound, allow `tailscale0`) is sufficient for everything except MariaDB. **Docker bypasses UFW for published ports**, so TCP 33306 is publicly reachable as soon as `make fpp-up` runs — no firewall change needed. fail2ban watches MariaDB auth failures via journald and bans source IPs at the iptables `DOCKER-USER` chain (which Docker DOES evaluate before its NAT rules).
 
 **Security Invariants — FPP MariaDB exception**: Vercel needs to reach the FPP database and Cloudflare doesn't proxy MySQL on non-Enterprise plans. Mitigations: TLS required, schema-scoped user, fail2ban. Quarantined to `apps/fpp/` so future apps don't pattern-match.
 

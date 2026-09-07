@@ -98,7 +98,7 @@ Internal networks — never exposed publicly:
 
 Homelab connectivity: Tailscale
   VPS → Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
-  SSH → Tailscale only (sshd ListenAddress bound to tailscale0, port 22 firewalled)
+  SSH → Tailscale only (UFW default-deny, only tailscale0 allowed in; sshd may listen on all interfaces)
 
 Docker API access — no direct docker.sock mounts:
   socket-proxy             (read-only)  → Traefik
@@ -137,7 +137,7 @@ Docker API access — no direct docker.sock mounts:
 
 **Four socket proxy instances, no docker.sock mounts.** Traefik gets read-only access (container/network enumeration). Dozzle and Beszel share a second read-only proxy scoped to CONTAINERS+LOGS+STATS. RollHook and Watchtower each get a dedicated proxy with POST=1 on isolated networks — write access never shared between them.
 
-**SSH via Tailscale only.** `sshd` binds to the Tailscale interface IP only — nothing listens on port 22 of the public IP. UFW blocks all remaining public inbound. Zero SSH attack surface from the internet.
+**SSH via Tailscale only — enforced by UFW, not by sshd's bind address.** UFW is default-deny inbound with a single allow rule on `tailscale0`; `sshd` may listen on all interfaces (it does, `0.0.0.0:22`), the packet never reaches it from the public IP. Rebinding `ListenAddress` to the Tailscale IP was tried and dropped: sshd then fails to start when `tailscale0` is not up yet at boot, which is a lock-out. Proof is `make firewall` (`ufw status verbose`), and `/audit` checks it.
 
 **Watchtower over WUD.** Auto-updates all containers except Postgres and Valkey (opted out via label). Pushover notifications at warn level (failures only — not every update). Postgres and Valkey are excluded: major version bumps can have data format implications, updates must be deliberate with a backup first.
 
@@ -145,7 +145,7 @@ Docker API access — no direct docker.sock mounts:
 
 **1Password for secrets.** All sensitive values in 1Password vaults `vps` + `common`. Zero secrets in the repo — `.env.tpl` contains only `op://` references. Variable names and setup instructions documented in the Secrets section below. Deploy always with `op run --env-file=.env.tpl -- docker compose up -d` (or `make up`).
 
-**No Terraform.** Single-server setup doesn't justify state management overhead. UFW is the only firewall layer — the hosting provider has no panel firewall. This is sufficient given sshd binds to Tailscale only and cloudflared is outbound-only.
+**No Terraform.** Single-server setup doesn't justify state management overhead. UFW is the only firewall layer — the hosting provider has no panel firewall. This is sufficient given UFW only admits the Tailscale interface and cloudflared is outbound-only.
 
 ---
 
@@ -173,12 +173,10 @@ sudo tailscale up --ssh --advertise-tags=tag:vps   # complete auth in browser
 tailscale ip -4                                     # note the assigned Tailscale IP (100.x.x.x)
 ```
 
-Then bind sshd to the Tailscale interface:
+Do **not** bind sshd to the Tailscale IP. UFW (step 7) is what keeps port 22 off the public internet; a `ListenAddress <tailscale-ip>` makes sshd fail at boot whenever `tailscale0` comes up after it. Verify instead:
 ```bash
-# Edit /etc/ssh/sshd_config.d/99-hardening.conf
-# Uncomment and set: ListenAddress <tailscale-ip>
-sudo systemctl restart ssh
-# ⚠ Open a second SSH session via Tailscale IP to verify before closing this one
+sudo ufw status verbose        # Default: deny (incoming); only "Anywhere on tailscale0 ALLOW IN"
+# ⚠ Open a second SSH session via the Tailscale IP to verify before closing this one
 ```
 
 `--ssh` enables Tailscale SSH — identity-based auth via your Tailscale account, no SSH keys required once active. The `authorized_keys` populated by `setup.sh` is only needed for this bootstrap window.
@@ -211,7 +209,7 @@ Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`). The `.env.tpl
 
 ### 7. Firewall
 
-HostingFuchs has no panel firewall, so UFW is the only host-level filter. UFW denies all inbound by default and only allows the Tailscale interface — that's sufficient for everything except FPP MariaDB.
+The provider has no panel firewall, so UFW is the only host-level filter. UFW denies all inbound by default and only allows the Tailscale interface — that's sufficient for everything except FPP MariaDB.
 
 **Note on Docker + UFW:** Docker publishes ports via its own iptables rules that bypass UFW entirely. Adding `ports: ["33306:3306"]` to `apps/fpp/compose.yml` makes MariaDB reachable on the public IP automatically — UFW does not block it. fail2ban operates on the `DOCKER-USER` chain (not the UFW chain) to ban auth-failure source IPs.
 

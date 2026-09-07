@@ -86,6 +86,15 @@ ssh vps "tailscale status"
 - WARN: `# Health check:` section appears with warnings in the output (e.g. DNS configuration failures)
 - Known benign: `/etc/resolv.conf` permission warning — harmless on Ubuntu 24.04 with systemd-resolved managing DNS
 
+**Firewall proof — the SSH invariant is UFW, not sshd's bind address:**
+```bash
+ssh vps "sudo ufw status verbose && echo '---' && sudo ss -tlnp | grep -E ':22 '"
+```
+
+**Thresholds:**
+- CRITICAL: `Status: inactive`, `Default:` not `deny (incoming)`, or any `ALLOW IN` rule that is not scoped `on tailscale0`
+- Known benign (suppress): sshd on `0.0.0.0:22` / `[::]:22` — it listens on all interfaces by design; a `ListenAddress` on the Tailscale IP fails at boot when `tailscale0` is late (lock-out). Never propose rebinding it.
+
 ### Phase 5: Recent Errors (Log Scan)
 
 ```bash

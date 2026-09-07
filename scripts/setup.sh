@@ -91,11 +91,15 @@ chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "/home/${DEPLOY_USER}/.ssh"
 
 # =============================================================================
 # 3. SSH hardening
-# NOTE: SSH binds to Tailscale IP only — run 'tailscale up' BEFORE restarting sshd.
+# sshd keeps listening on ALL interfaces. Tailscale-only reachability is UFW's
+# job (section 5: default deny in, allow tailscale0) — never a ListenAddress on
+# the Tailscale IP: sshd then fails to start whenever tailscale0 comes up after
+# it at boot, which is a lock-out with no console. Proof: `make firewall`.
 # =============================================================================
 log "Hardening SSH..."
 cat > /etc/ssh/sshd_config.d/99-hardening.conf << 'EOF'
-# Hardened SSH config — key authentication only, Tailscale interface only.
+# Hardened SSH config — key authentication only. Reachability is enforced by
+# UFW (only tailscale0 allowed in), not by binding sshd to the Tailscale IP.
 PermitRootLogin no
 PasswordAuthentication no
 ChallengeResponseAuthentication no
@@ -109,11 +113,9 @@ PrintLastLog yes
 TCPKeepAlive yes
 ClientAliveInterval 300
 ClientAliveCountMax 2
-# Bind to Tailscale interface only (set ListenAddress after tailscale up)
-# ListenAddress <tailscale-ip>   <- Uncomment and set after Tailscale is connected
+# No ListenAddress on purpose — see scripts/setup.sh section 3.
 EOF
-# Do NOT restart sshd here — do it manually after Tailscale is connected.
-log "SSH config written. Restart sshd AFTER Tailscale is up: systemctl restart sshd"
+log "SSH config written. Apply with: systemctl restart sshd (keep this session open, verify a second one over Tailscale first)"
 
 # =============================================================================
 # 4. Kernel hardening (sysctl)
@@ -155,7 +157,7 @@ ufw default allow outgoing
 # Tailscale interface: allow everything (SSH, monitoring agents, OTel)
 ufw allow in on tailscale0 comment "Tailscale"
 ufw --force enable
-log "UFW enabled. SSH only accessible via Tailscale."
+log "UFW enabled. SSH reachable via Tailscale only (deny in, allow tailscale0) — sshd itself stays on all interfaces."
 
 # =============================================================================
 # 6. Unattended upgrades (OS security patches only)
@@ -366,9 +368,8 @@ log "============================================================"
 log " Setup complete! Next steps:"
 log "============================================================"
 log " 1. Connect Tailscale:    tailscale up  (already done if you see a TS IP)"
-log " 2. Lock down SSH:        Edit /etc/ssh/sshd_config.d/99-hardening.conf"
-log "                          Uncomment: ListenAddress <tailscale-ip>"
-log "                          Verify Tailscale SSH works, then: systemctl restart sshd"
+log " 2. Apply SSH hardening:  systemctl restart sshd   (sshd stays on all interfaces;"
+log "                          UFW admits only tailscale0 — verify: ufw status verbose)"
 log " 3. Set 1Password SA:     Add OP_SERVICE_ACCOUNT_TOKEN to /home/${DEPLOY_USER}/.bashrc"
 log "                          source ~/.bashrc && op vault list (verify access)"
 log " 4. Cloudflare Tunnel:    Token already in 1Password (vps/cloudflare-tunnel)"
