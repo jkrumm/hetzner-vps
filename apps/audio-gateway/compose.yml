@@ -29,10 +29,10 @@ services:
     security_opt:
       - no-new-privileges:true
     mem_limit: 512m
-    # A podcast job runs for 10–20 minutes. RollHook brings the replacement
-    # container up first, so the old one may take its time: SIGTERM starts the
-    # drain (SHUTDOWN_DRAIN_MS) and Docker waits this long before SIGKILL.
-    stop_grace_period: 25m
+    # RollHook brings the replacement container up first, then SIGTERMs this one:
+    # the drain (SHUTDOWN_DRAIN_MS, 60 s) finishes in-flight STT/TTS requests and
+    # Docker waits a little longer than that before SIGKILL.
+    stop_grace_period: 90s
     environment:
       NODE_ENV: production
       PORT: "7714"
@@ -56,25 +56,13 @@ services:
       # the tailnet gates access — so these are labels, not credentials: a client
       # authenticating with `Bearer hermes` shows up as audio.caller=hermes.
       AUDIO_CALLER_TOKENS: hermes=hermes,macwhisper=macwhisper
-      # Podcast pipeline (POST /v1/podcasts): job ledger + episode artifacts on the
-      # same /data volume as the usage DB; covers via the image-gen gateway over the
-      # shared proxy net; publishing into Audiobookshelf over the tailnet (ABS_* come
-      # from 1Password — unset = publish step skipped, episodes stay downloadable).
-      SHUTDOWN_DRAIN_MS: "1440000"
-      # The podcast pipeline moved to the mini instance (audio-gateway
+      SHUTDOWN_DRAIN_MS: "60000"
+      # The podcast pipeline lives on the mini instance (audio-gateway
       # docs/podcast-editorial-room.md, Decision 2): the brain vault and the
-      # research gateway are only reachable there. This container keeps STT/TTS
-      # and answers /v1/podcasts* with a 410 pointing at podcasts.mini.jkrumm.com.
+      # research gateway are only reachable there. This container is STT/TTS
+      # only and answers /v1/podcasts* with a 410 pointing at podcasts.mini.jkrumm.com,
+      # so none of the PODCAST_* / IMAGE_GEN_* / ABS_* wiring belongs here.
       PODCAST_ENABLED: "false"
-      PODCAST_DATA_DIR: /data/podcasts
-      PODCAST_DB: /data/podcasts.db
-      IMAGE_GEN_URL: http://image-gen-gateway:7716
-      IMAGE_GEN_API_KEY: ${IMAGE_GEN_API_KEY}
-      ABS_URL: ${ABS_URL:-}
-      ABS_API_KEY: ${ABS_API_KEY:-}
-      # Finished/failed podcast jobs are announced in this Slack channel via argo-api
-      # (channel NAME, resolved through Argo's channel list with ARGO_API_SECRET).
-      PODCAST_NOTIFY_CHANNEL: media
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.
       - /var/lib/audio-gateway:/data

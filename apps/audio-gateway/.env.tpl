@@ -14,9 +14,5 @@ USAGE_HTTP_URL=http://argo-api:4000/usage/records
 USAGE_SOURCE_LABEL=audio-gateway
 ARGO_API_SECRET=op://common/api/SECRET
 MACHINE=vps
-# Podcast pipeline — cover art via the image-gen gateway (same bearer the Tauri app uses).
-IMAGE_GEN_API_KEY=op://vps/image-gen-gateway/API_SECRET
-# Audiobookshelf publish target (tailnet URL + API key, both kept in 1Password so the
-# public repo never names the host).
-ABS_URL=op://vps/audiobookshelf/URL
-ABS_API_KEY=op://vps/audiobookshelf/API_KEY
+# No podcast secrets here (IMAGE_GEN_API_KEY, ABS_*): the pipeline runs on the mini
+# instance; this container is STT/TTS only (PODCAST_ENABLED=false in compose.yml).
