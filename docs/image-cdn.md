@@ -1,13 +1,14 @@
 # Image CDN — imgproxy + B2 + Cloudflare
 
-Phase 1 of the image serving substrate. The `img/` prefix of the existing
+The image serving substrate. The `img/` prefix of the existing
 private object-storage bucket holds originals; imgproxy on the VPS renders
 resized/reformatted derivatives on demand; Cloudflare's edge caches those
 derivatives. Consumers: the static photo-gallery site, blog/articles, the
 Obsidian vault, and agents.
 
-The later self-built photo service (shutterflow.app) is a separate project that
-will consume this same substrate — nothing here is specific to it.
+`image-share` (homelab) is the layer that consumes this substrate for
+sharing/publishing; `shutterflow` is a separate, unrelated MacBook photography
+app and does not touch this CDN.
 
 ```
 client → Cloudflare edge (cache) → tunnel → Traefik → imgproxy → B2 img/ (private)
@@ -66,7 +67,7 @@ it to `s3://<bucket>/img/` before anything else runs. Public URLs therefore leak
 neither the bucket name nor the `img/` prefix. The long form
 (`plain/s3://<bucket>/img/…`) still works and is equivalent.
 
-Anyone who knows an object key can render it. That is intended for phase 1.
+Anyone who knows an object key can render it — unsigned URLs are the permanent design, not a placeholder.
 
 | Control | What it prevents |
 |-|-|
