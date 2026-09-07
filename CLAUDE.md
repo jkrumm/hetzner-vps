@@ -252,6 +252,7 @@ apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by 
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics emails. RollHook-managed.
 apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
+apps/research-gateway/compose.yml  research-gateway + lightpanda sidecar — the /research backend at research.DOMAIN (Tailscale-only, RollHook-managed; make research-gateway-{up,down,env,bootstrap-image,redeploy})
 apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
 apps/fpp/compose.yml          FPP — MariaDB now (port 33306 exposed for Vercel); fpp-server + fpp-analytics later
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
@@ -286,8 +287,8 @@ cron/pg-health                Postgres liveness heartbeat, every minute — sour
 cron/pg-health.env.tpl        op template for the seeded pg-health cron env (materialized via make cron-env-seed)
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
-README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (make prune-cron-install) — never volumes
+README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
 ```
 
@@ -322,6 +323,8 @@ Monitored from HomeLab Uptime Kuma (`VPS > Infra`) with **two** monitors: the pu
 > **Load-bearing invariant:** the imgproxy B2 key must be created with `--name-prefix img/`. `backups/vps/postgres/` lives in the same bucket, so that server-side restriction — not `IMGPROXY_S3_ALLOWED_BUCKETS` — is what keeps an unauthenticated public service away from the database dumps. Never point imgproxy at `op://common/backblaze-s3/*` (bucket-wide, has `writeFiles`).
 
 Full design, prefix conventions, the Cloudflare `Vary`/`Accept` caveat, and the B2 provisioning + verification walkthrough: `docs/image-cdn.md`.
+
+**research-gateway** — the backend behind the global `/research` skill at `research.DOMAIN` (Tailscale-only via a grey-cloud A record, same pattern as argo). Bearer REST + an MCP facade with one submit→poll job contract; a `lightpanda` headless-browser sidecar does the page fetches. Job records persist in the `research-gateway-data` volume and a job orphaned by a restart is reaped to `error` once its heartbeat goes stale — the `job.reaped` log line is alerted on (`observability/alerts/`). RollHook-managed; `make research-gateway-up` pins the running image (never rolls back to a stale `:latest`).
 
 **photo-gallery** — static Astro photo gallery at `photos.DOMAIN`. nginx:alpine serves a host-mounted directory (`/home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro`). No image registry, no RollHook — content is built on the developer laptop and rsynced via SSH/Tailscale by the `photo-flow` CLI (`photoflow sync-gallery`). Watchtower auto-updates the nginx base image. The host directory must exist (and contain at least `index.html`) before `make photo-gallery-up`, otherwise the healthcheck fails.
 
@@ -471,12 +474,12 @@ Never violate these:
 
 - No `ports:` for any service except OTel (4317/4318 Tailscale-reachable), monitoring agents, **and the FPP MariaDB exception below**
 - Zero inbound ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
+- UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
 - Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
 - Postgres, Valkey, and MariaDB: no auto-update via Watchtower — manual only
 
-- UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
 **FPP MariaDB exception (TCP 33306 inbound):** Vercel needs to reach the FPP database and Cloudflare doesn't proxy MySQL on non-Enterprise plans. Mitigations: TLS required (`--require-secure-transport=ON` + `REQUIRE SSL` on the user), schema-scoped `fpp@'%'` user, fail2ban on auth failures via `DOCKER-USER` chain, no remote root. The deviation is contained in `apps/fpp/` so future apps don't pattern-match off it. See **FPP MariaDB** section above.
 
 ---

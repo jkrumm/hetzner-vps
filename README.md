@@ -128,6 +128,7 @@ Docker API access — no direct docker.sock mounts:
 | watchtower | containrrr/watchtower | Auto-updates containers, Pushover on failure | auto |
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
 | imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
+| research-gateway (+ lightpanda sidecar) | rollhook.jkrumm.com/research-gateway | `/research` backend at `research.<DOMAIN>` — bearer REST + MCP facade, submit→poll jobs; Tailscale-only (grey-cloud A record). `apps/research-gateway/compose.yml` | RollHook (push to `jkrumm/research-gateway:master`) |
 
 ---
 
