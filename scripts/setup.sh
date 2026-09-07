@@ -27,14 +27,19 @@ warn() { echo "[$(date +%H:%M:%S)] WARN: $*"; }
 log "Setting hostname to vps..."
 hostnamectl set-hostname vps
 
-# cloud-init manages /etc/hosts and resets it on reboot — disable and fix manually
-if grep -q 'manage_etc_hosts.*true' /etc/cloud/cloud.cfg 2>/dev/null; then
-  log "Disabling cloud-init manage_etc_hosts..."
-  sed -i 's/manage_etc_hosts: true/manage_etc_hosts: false/' /etc/cloud/cloud.cfg
-fi
-if ! grep -q '127.0.1.1 vps' /etc/hosts; then
+# cloud-init re-renders /etc/hosts from its template on EVERY boot: the provider's
+# user-data carries `manage_etc_hosts: true` plus its own hostname, and user-data
+# outranks anything dropped into /etc/cloud/cloud.cfg.d — so it cannot be switched
+# off from here. Fix the live file for now AND the template it is rendered from,
+# or the first reboot brings back "sudo: unable to resolve host vps".
+if ! grep -q '^127.0.1.1 vps' /etc/hosts; then
   sed -i "s/^127\.0\.1\.1.*/127.0.1.1 vps/" /etc/hosts
-  grep -q '127.0.1.1 vps' /etc/hosts || echo '127.0.1.1 vps' >> /etc/hosts
+  grep -q '^127.0.1.1 vps' /etc/hosts || echo '127.0.1.1 vps' >> /etc/hosts
+fi
+HOSTS_TMPL=/etc/cloud/templates/hosts.debian.tmpl
+if [[ -f "${HOSTS_TMPL}" ]] && ! grep -q '^127.0.1.1 vps' "${HOSTS_TMPL}"; then
+  log "Adding 127.0.1.1 vps to the cloud-init hosts template..."
+  sed -i '/^127\.0\.1\.1 {{fqdn}} {{hostname}}$/a 127.0.1.1 vps' "${HOSTS_TMPL}"
 fi
 
 log "Setting timezone to UTC..."
