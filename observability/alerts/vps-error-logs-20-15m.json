@@ -4,12 +4,16 @@
     "webhook": "Slack #alerts"
   },
   "dashboard": "VPS \u2014 Overview",
+  "displayName": "VPS \u2014 Overview - Error logs (severity >= error, count in range)",
   "interval": "15m",
   "message": null,
   "name": "VPS error logs >= 20 (15m)",
   "note": null,
   "numConsecutiveWindows": null,
   "source": "tile",
+  "tags": [
+    "agent"
+  ],
   "threshold": 20,
   "thresholdType": "above",
   "tile": "Error logs (severity >= error, count in range)"

@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; empty is healthy)",
+  "interval": "15m",
+  "message": null,
+  "name": "research-gateway job.reaped >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 0,
+  "thresholdType": "above",
+  "tile": "10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; empty is healthy)"
+}

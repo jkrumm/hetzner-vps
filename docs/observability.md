@@ -381,7 +381,7 @@ same-named dashboard exists in the target env, else `POST`).
 
 `make hyperdx-webhook-setup` (prod-only, idempotent) creates or updates a
 HyperDX webhook named `Slack #alerts` (service `slack`) pointed at
-`op://common/slack/WEBHOOK_ALERTS`. Run it once before applying any alert
+`op://common/slack/VPS_WEBHOOK_ALERTS`. Run it once before applying any alert
 that notifies over Slack — alerts reference this webhook by **name**, not id.
 
 Alerts themselves are code too: the same `hyperdx-export`/`hyperdx-apply`

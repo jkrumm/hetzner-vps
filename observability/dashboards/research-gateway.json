@@ -157,6 +157,41 @@
       "w": 24,
       "x": 0,
       "y": 37
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Reaped",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body = 'job.reaped'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6a9ed8a0b86a87e50f7c8c64",
+      "name": "10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; empty is healthy)",
+      "w": 6,
+      "x": 0,
+      "y": 45
     }
   ]
 }

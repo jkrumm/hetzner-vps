@@ -480,7 +480,7 @@ hyperdx-dev-bootstrap: require-dev
 	./scripts/hyperdx-dev-bootstrap.sh
 
 ## HyperDX Slack webhook — idempotent, prod-only. Ensures webhook "Slack #alerts"
-## exists/matches op://common/slack/WEBHOOK_ALERTS. Run before hyperdx-apply.
+## exists/matches op://common/slack/VPS_WEBHOOK_ALERTS. Run before hyperdx-apply.
 hyperdx-webhook-setup: require-prod
 	./scripts/hyperdx-webhook-setup.sh
 

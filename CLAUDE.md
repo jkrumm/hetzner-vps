@@ -278,7 +278,7 @@ scripts/firewall.sh           UFW status — provider-level firewall configured 
 scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed
 scripts/hyperdx-agent-setup.sh  Prod — idempotent HyperDX agent user + accessKey setup, MCP smoke test (make hyperdx-agent-setup)
 scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + accessKey bootstrap, MCP smoke test (make hyperdx-dev-bootstrap)
-scripts/hyperdx-webhook-setup.sh  Prod — idempotent Slack webhook ("Slack #alerts") setup from op://common/slack/WEBHOOK_ALERTS (make hyperdx-webhook-setup)
+scripts/hyperdx-webhook-setup.sh  Prod — idempotent Slack webhook ("Slack #alerts") setup from op://common/slack/VPS_WEBHOOK_ALERTS (make hyperdx-webhook-setup)
 scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
 observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
 cron/pg-backup                Postgres backup, daily 03:00

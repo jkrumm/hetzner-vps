@@ -4,12 +4,16 @@
     "webhook": "Slack #alerts"
   },
   "dashboard": "VPS \u2014 Overview",
+  "displayName": "VPS \u2014 Overview - Edge p95 latency",
   "interval": "15m",
   "message": null,
   "name": "VPS edge p95 > 3s (15m)",
   "note": null,
   "numConsecutiveWindows": null,
   "source": "tile",
+  "tags": [
+    "agent"
+  ],
   "threshold": 3000000000,
   "thresholdType": "above",
   "tile": "Edge p95 latency"

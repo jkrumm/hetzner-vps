@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "Argo API",
+  "displayName": "Argo API - Spans ingested (all kinds \u2014 0 in 30m means OTel ingest stalled, not a quiet API)",
+  "interval": "30m",
+  "message": null,
+  "name": "OTel ingest stalled \u2014 0 argo-api spans (30m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 1,
+  "thresholdType": "below",
+  "tile": "Spans ingested (all kinds \u2014 0 in 30m means OTel ingest stalled, not a quiet API)"
+}

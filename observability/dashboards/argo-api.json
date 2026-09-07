@@ -347,6 +347,34 @@
       "w": 12,
       "x": 0,
       "y": 31
+    },
+    {
+      "config": {
+        "color": "chart-blue",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Spans",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6a9ed89fb86a87e50f7c8c3e",
+      "name": "Spans ingested (all kinds \u2014 0 in 30m means OTel ingest stalled, not a quiet API)",
+      "w": 6,
+      "x": 0,
+      "y": 3
     }
   ]
 }

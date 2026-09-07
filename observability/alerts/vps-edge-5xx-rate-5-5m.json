@@ -4,12 +4,16 @@
     "webhook": "Slack #alerts"
   },
   "dashboard": "VPS \u2014 Overview",
+  "displayName": "VPS \u2014 Overview - Edge 5xx rate (%)",
   "interval": "5m",
   "message": null,
   "name": "VPS edge 5xx rate > 5% (5m)",
   "note": null,
   "numConsecutiveWindows": null,
   "source": "tile",
+  "tags": [
+    "agent"
+  ],
   "threshold": 0.05,
   "thresholdType": "above",
   "tile": "Edge 5xx rate (%)"

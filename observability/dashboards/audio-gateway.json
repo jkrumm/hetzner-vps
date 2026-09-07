@@ -27,6 +27,11 @@
     },
     {
       "collapsed": false,
+      "id": "podcast",
+      "title": "Podcast \u2014 editorial room (P1 episodes, P2 writer stages, P3 synth fan-out, P4 writers' room health; jobs run on the mini instance)"
+    },
+    {
+      "collapsed": false,
       "id": "errors",
       "title": "Degradation & errors (rare-event tiles: empty is the healthy state)"
     },
@@ -979,6 +984,143 @@
       "w": 4,
       "x": 20,
       "y": 0
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "onClick": {
+          "target": {
+            "mode": "id",
+            "source": "Traces"
+          },
+          "type": "search",
+          "whereLanguage": "sql",
+          "whereTemplate": "ServiceName = 'audio-gateway' AND TraceId = '{{TraceId}}'"
+        },
+        "source": "Traces",
+        "sqlTemplate": "SELECT Timestamp, SpanAttributes['audio.podcast.title'] AS Title, round(Duration / 1e9) AS wall_s, round(toFloat64OrZero(SpanAttributes['audio.audio_seconds'])) AS audio_s, round(toFloat64OrZero(SpanAttributes['audio.cost_usd']), 3) AS cost_usd, SpanAttributes['audio.podcast.turns'] AS turns, SpanAttributes['audio.podcast.published'] AS published, StatusCode AS status, TraceId FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.podcast' AND $__filters ORDER BY Timestamp DESC LIMIT 50"
+      },
+      "containerId": "podcast",
+      "h": 6,
+      "id": "6a9ed89fb86a87e50f7c8c4a",
+      "name": "P1. Episodes \u2014 wall s, audio s, USD, turns, published, status (click a row to open the job trace)",
+      "w": 24,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['audio.podcast.stage'] AS Stage, count() AS calls, round(quantile(0.5)(Duration) / 1e9) AS p50_s, round(max(Duration) / 1e9) AS max_s, round(avg(toFloat64OrZero(SpanAttributes['llm.output_tokens']))) AS avg_out_tokens, countIf(SpanAttributes['llm.finish_reason'] = 'length') AS truncated FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.podcast.llm' AND $__filters GROUP BY Stage ORDER BY p50_s DESC"
+      },
+      "containerId": "podcast",
+      "h": 5,
+      "id": "6a9ed89fb86a87e50f7c8c4b",
+      "name": "P2. Writer stages \u2014 calls, p50/max wall (s), avg output tokens, truncated (finish_reason=length means the writer budget is too small)",
+      "w": 12,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT TraceId, count() AS turns, round(quantile(0.95)(Duration) / 1e6) AS p95_ms, round(sum(Duration) / 1e9) AS compute_s FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.synth.chunk' AND $__filters AND TraceId IN (SELECT TraceId FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND SpanName = 'audio.podcast') GROUP BY TraceId ORDER BY turns DESC LIMIT 20"
+      },
+      "containerId": "podcast",
+      "h": 5,
+      "id": "6a9ed89fb86a87e50f7c8c4c",
+      "name": "P3. Synthesis fan-out per episode \u2014 audio.synth.chunk spans under an audio.podcast root: turns, p95 (ms), compute (s)",
+      "w": 12,
+      "x": 12,
+      "y": 6
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed",
+            "valueExpression": "",
+            "where": "ServiceName = 'audio-gateway' AND Body = 'podcast.failed'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "containerId": "podcast",
+      "h": 3,
+      "id": "6a9ed89fb86a87e50f7c8c4d",
+      "name": "P4. Podcast jobs failed (count \u2014 podcast.failed log lines)",
+      "w": 6,
+      "x": 0,
+      "y": 11
+    },
+    {
+      "config": {
+        "color": "chart-warning",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Retries",
+            "valueExpression": "",
+            "where": "ServiceName = 'audio-gateway' AND Body LIKE 'podcast writer reply did not parse%'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "containerId": "podcast",
+      "h": 3,
+      "id": "6a9ed89fb86a87e50f7c8c4e",
+      "name": "P4. Writer retries (count \u2014 reply did not parse)",
+      "w": 6,
+      "x": 6,
+      "y": 11
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Logs",
+        "sqlTemplate": "SELECT Body AS message, lower(SeverityText) AS severity, count() AS n FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'audio-gateway' AND Body LIKE 'podcast%' AND lower(SeverityText) IN ('warn', 'error') AND $__filters GROUP BY message, severity ORDER BY n DESC LIMIT 20"
+      },
+      "containerId": "podcast",
+      "h": 4,
+      "id": "6a9ed89fb86a87e50f7c8c4f",
+      "name": "P4. Writers' room health \u2014 warn + error podcast log lines by message (reviewer/revision skipped, no content, publish failed)",
+      "w": 12,
+      "x": 12,
+      "y": 11
     }
   ]
 }
