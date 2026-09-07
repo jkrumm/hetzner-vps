@@ -3,7 +3,7 @@
 # HyperDX Slack webhook setup — idempotent, prod-only.
 #
 # Ensures a HyperDX webhook named "Slack #alerts" (service `slack`) exists,
-# pointed at the incoming-webhook URL from op://common/slack/WEBHOOK_ALERTS.
+# pointed at the incoming-webhook URL from op://common/slack/VPS_WEBHOOK_ALERTS.
 # Create-or-update by NAME: a PUT rotates the URL if it already differs. Run
 # this before `make hyperdx-apply` — alerts-as-code (scripts/hyperdx-sync.sh)
 # resolves a `channel.webhook` reference against this webhook by name.
@@ -37,7 +37,7 @@ fi
 DOMAIN=$(read_secret "op://vps/config/DOMAIN" "check the vps vault's 'config' item.")
 BASE="https://hyperdx.${DOMAIN}"
 
-SLACK_URL=$(read_secret "op://common/slack/WEBHOOK_ALERTS" "create this field in 1Password first (common vault, item 'slack').")
+SLACK_URL=$(read_secret "op://common/slack/VPS_WEBHOOK_ALERTS" "create this field in 1Password first (common vault, item 'slack').")
 
 BODY=$(WEBHOOK_NAME="$WEBHOOK_NAME" SLACK_URL="$SLACK_URL" python3 -c "
 import json, os
