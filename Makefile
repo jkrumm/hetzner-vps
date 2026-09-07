@@ -54,7 +54,6 @@ endif
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
-        modelpick-up modelpick-down modelpick-env modelpick-refresh modelpick-migrate modelpick-seed \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-restart clickstack-upgrade
@@ -408,35 +407,6 @@ image-gen-gateway-env: require-prod
 	op --account tkrumm inject -i apps/image-gen-gateway/.env.tpl -o apps/image-gen-gateway/.env -f
 	chmod 644 apps/image-gen-gateway/.env
 	@echo "Wrote apps/image-gen-gateway/.env (chmod 644, gitignored)"
-
-## modelpick stack (Bun + TanStack Start SSR, RollHook-managed) — apps/modelpick/compose.yml
-## Deploys to modelpick.jkrumm.com. RollHook deploys on push to jkrumm/modelpick:master.
-modelpick-up:   require-prod ; $(OP_RUN) docker compose -f apps/modelpick/compose.yml up -d
-modelpick-down: require-prod ; $(OP_RUN) docker compose -f apps/modelpick/compose.yml down
-## Materialize apps/modelpick/.env from .env.tpl (via `op inject`). Required so
-## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
-## can resolve ${VAR} interpolations in apps/modelpick/compose.yml. Re-run after
-## rotating any modelpick secret. Resulting .env is chmod 644 and gitignored.
-modelpick-env: require-prod
-	op --account tkrumm inject -i apps/modelpick/.env.tpl -o apps/modelpick/.env -f
-	chmod 644 apps/modelpick/.env
-	@echo "Wrote apps/modelpick/.env (chmod 644, gitignored)"
-## Apply Drizzle migrations inside the running container.
-modelpick-migrate: require-prod
-	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
-	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
-	docker exec "$$CONTAINER" bun run scripts/migrate.ts
-## Seed the model catalog (idempotent — safe to re-run).
-modelpick-seed: require-prod
-	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
-	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
-	docker exec "$$CONTAINER" bun run scripts/seed-run.ts
-## Manually trigger the daily data refresh (probe → collect → recommend → news).
-## In prod this runs via cron — see the deploy README for the cron entry.
-modelpick-refresh: require-prod
-	@CONTAINER=$$(docker ps --filter 'label=com.docker.compose.service=modelpick' --format '{{.Names}}' | head -1); \
-	[ -n "$$CONTAINER" ] || { echo "  ✗ modelpick not running"; exit 1; }; \
-	docker exec "$$CONTAINER" bun run scripts/refresh.ts
 
 ## audio-gateway stack (Bun audio service, RollHook-managed) — apps/audio-gateway/compose.yml
 ## Tailscale-only via DNS-only A record audio-gateway.jkrumm.com → ${VPS_TAILSCALE_IP}.

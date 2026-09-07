@@ -58,7 +58,6 @@ MARIADB_ROOT_PASSWORD=op://mini/vps-dev/MARIADB_ROOT_PASSWORD
 # schema needs its line here as well as in setup-postgres.sh.
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
 UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD
-MODELPICK_DB_PASSWORD=op://vps/modelpick/DB_PASSWORD
 BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 
 # --- Deliberately ABSENT ----------------------------------------------------
