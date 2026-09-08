@@ -14,7 +14,7 @@
   "tags": [
     "agent"
   ],
-  "threshold": 0,
+  "threshold": 1,
   "thresholdType": "above",
   "tile": "P4. Podcast jobs failed (count \u2014 podcast.failed log lines)"
 }
