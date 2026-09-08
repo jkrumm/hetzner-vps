@@ -240,20 +240,35 @@ bun-email-api-env: require-prod
 ## RollHook deploys on push to jkrumm/argo:master.
 ##
 ## argo-up: recreate containers WITHOUT pulling a new image. Reads the SHAs
-## of the currently-running containers and pins IMAGE_TAG to each. Use this
-## when you change apps/argo/compose.yml (labels, mounts, env) and need the
-## changes applied without bumping the running code. To deploy new code, use
-## `make argo-redeploy` (triggers RollHook via empty-commit push).
+## of the currently-running-OR-STOPPED containers and pins IMAGE_TAG to each.
+## Use this when you change apps/argo/compose.yml (labels, mounts, env) and
+## need the changes applied without bumping the running code. To deploy new
+## code, use `make argo-redeploy` (triggers RollHook via empty-commit push).
 ##
 ## Why this dance: RollHook tags pushed images by git SHA only — it does NOT
 ## update the :latest tag. So a naive `docker compose up -d` would resolve
 ## `${IMAGE_TAG:-...:latest}` and roll the running containers back to a stale
 ## :latest. Pinning to the running image avoids that regression.
+##
+## `docker ps` (no -a) only sees RUNNING containers — so an `exited` argo-api,
+## the exact incident this target exists to fix, made it resolve to nothing
+## and abort with "not running", refusing the one command that could recover
+## it. `docker ps -a` names the container in any state; `docker inspect` on
+## that name reads its pinned image whether it's up or down. The two failure
+## messages below are deliberately different: no container by that name at
+## all needs a bootstrap (there is no image to pin), a container that exists
+## but couldn't be inspected is a different, rarer fault worth a manual look.
 argo-up: require-prod
-	@API_IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=argo-api' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
-	WEB_IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=argo-dashboard' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
+	@API_NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=argo-api' --format '{{.Names}}' | head -1); \
+	WEB_NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=argo-dashboard' --format '{{.Names}}' | head -1); \
+	if [ -z "$$API_NAME" ] || [ -z "$$WEB_NAME" ]; then \
+	  echo "  ✗ no argo-api/argo-dashboard container exists at all — bootstrap via 'make argo-bootstrap-image' then push to argo master to trigger RollHook"; \
+	  exit 1; \
+	fi; \
+	API_IMG=$$(docker inspect --format '{{.Config.Image}}' "$$API_NAME" 2>/dev/null || echo ""); \
+	WEB_IMG=$$(docker inspect --format '{{.Config.Image}}' "$$WEB_NAME" 2>/dev/null || echo ""); \
 	if [ -z "$$API_IMG" ] || [ -z "$$WEB_IMG" ]; then \
-	  echo "  ✗ argo containers not running — bootstrap via 'make argo-bootstrap-image' then push to argo master to trigger RollHook"; \
+	  echo "  ✗ argo-api/argo-dashboard container exists ($$API_NAME/$$WEB_NAME, stopped or running) but its image could not be read — inspect it manually"; \
 	  exit 1; \
 	fi; \
 	echo "  pinning argo-api      → $$API_IMG"; \
@@ -298,12 +313,24 @@ argo-env: require-prod
 ## update the :latest tag. So a naive `docker compose up -d` would resolve
 ## `${IMAGE_TAG:-...:latest}` and roll the running container back to a stale
 ## :latest. Pinning to the running image avoids that regression.
+##
+## `docker ps -a` (not `docker ps`), because a stopped-but-present container
+## used to look identical to "never created" here — both gave an empty IMG —
+## and this target then took the genesis branch and rolled a merely-exited
+## container back to :latest, the exact regression the pinning dance exists
+## to prevent. Genesis now means what it says: no container by that name in
+## any state, not "not currently running".
 research-gateway-up: require-prod
-	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=research-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
-	if [ -z "$$IMG" ]; then \
-	  echo "  no running container — genesis start from :latest (bootstrap-seeded)"; \
+	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=research-gateway' --format '{{.Names}}' | head -1); \
+	if [ -z "$$NAME" ]; then \
+	  echo "  no research-gateway container exists — genesis start from :latest (bootstrap-seeded)"; \
 	  $(OP_RUN) docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d; \
 	else \
+	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	  if [ -z "$$IMG" ]; then \
+	    echo "  ✗ research-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; \
+	    exit 1; \
+	  fi; \
 	  echo "  pinning research-gateway → $$IMG"; \
 	  $(OP_RUN) env RESEARCH_GATEWAY_IMAGE=$$IMG docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d; \
 	fi
@@ -336,12 +363,20 @@ research-gateway-env: require-prod
 ## apps/meteo/compose.yml. Public at meteo.DOMAIN through the cloudflared tunnel.
 ## The mini does all computation; this container serves the built map, the basemap
 ## archive under /var/lib/meteo/basemap, and a disk cache of proxied API responses.
+## `docker ps -a` (not `docker ps`) — same fix as research-gateway-up above:
+## a stopped-but-present container must still be pinned, not mistaken for
+## genesis and rolled back to a stale :latest.
 meteo-up: require-prod
-	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=meteo-edge' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
-	if [ -z "$$IMG" ]; then \
-	  echo "  no running container — genesis start from :latest (bootstrap-seeded)"; \
+	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=meteo-edge' --format '{{.Names}}' | head -1); \
+	if [ -z "$$NAME" ]; then \
+	  echo "  no meteo-edge container exists — genesis start from :latest (bootstrap-seeded)"; \
 	  $(OP_RUN) docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env up -d; \
 	else \
+	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	  if [ -z "$$IMG" ]; then \
+	    echo "  ✗ meteo-edge container '$$NAME' exists but its image could not be read — inspect it manually"; \
+	    exit 1; \
+	  fi; \
 	  echo "  pinning meteo-edge → $$IMG"; \
 	  $(OP_RUN) env METEO_EDGE_IMAGE=$$IMG docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env up -d; \
 	fi
@@ -375,13 +410,19 @@ meteo-env: require-prod
 ##
 ## Same image-pinning dance as research-gateway-up above, for the same reason: RollHook
 ## tags by git SHA and never moves :latest, so a naive `up -d` would roll the container
-## back to a stale :latest.
+## back to a stale :latest. `docker ps -a` (not `docker ps`), same fix as research-gateway-up:
+## a stopped-but-present container must be pinned, not mistaken for genesis.
 image-gen-gateway-up: require-prod
-	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=image-gen-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
-	if [ -z "$$IMG" ]; then \
-	  echo "  no running container — genesis start from :latest (bootstrap-seeded)"; \
+	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=image-gen-gateway' --format '{{.Names}}' | head -1); \
+	if [ -z "$$NAME" ]; then \
+	  echo "  no image-gen-gateway container exists — genesis start from :latest (bootstrap-seeded)"; \
 	  $(OP_RUN) docker compose -f apps/image-gen-gateway/compose.yml --env-file apps/image-gen-gateway/.env up -d; \
 	else \
+	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	  if [ -z "$$IMG" ]; then \
+	    echo "  ✗ image-gen-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; \
+	    exit 1; \
+	  fi; \
 	  echo "  pinning image-gen-gateway → $$IMG"; \
 	  $(OP_RUN) env IMAGE_GEN_GATEWAY_IMAGE=$$IMG docker compose -f apps/image-gen-gateway/compose.yml --env-file apps/image-gen-gateway/.env up -d; \
 	fi
@@ -414,9 +455,14 @@ image-gen-gateway-env: require-prod
 ## Recreate-with-config-change without rolling back to a stale :latest (same
 ## foot-gun as argo-up): pin the running image SHA into IMAGE_TAG. New code still
 ## deploys only through RollHook (push to audio-gateway master).
+## `docker ps -a` (not `docker ps`) so a stopped-but-present container still
+## resolves — same argo-up fix, same reason: `docker ps` alone made this abort
+## on exactly the exited container it exists to recover.
 audio-gateway-up: require-prod
-	@IMG=$$(docker inspect --format '{{.Config.Image}}' $$(docker ps --filter 'label=com.docker.compose.service=audio-gateway' --format '{{.Names}}' | head -1) 2>/dev/null || echo ""); \
-	if [ -z "$$IMG" ]; then echo "  ✗ audio-gateway not running — bootstrap via 'make audio-gateway-bootstrap-image' then push to audio-gateway master"; exit 1; fi; \
+	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=audio-gateway' --format '{{.Names}}' | head -1); \
+	if [ -z "$$NAME" ]; then echo "  ✗ no audio-gateway container exists at all — bootstrap via 'make audio-gateway-bootstrap-image' then push to audio-gateway master"; exit 1; fi; \
+	IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	if [ -z "$$IMG" ]; then echo "  ✗ audio-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; exit 1; fi; \
 	echo "  pinning audio-gateway → $$IMG"; \
 	$(OP_RUN) env IMAGE_TAG=$$IMG docker compose -f apps/audio-gateway/compose.yml up -d
 audio-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/audio-gateway/compose.yml down
